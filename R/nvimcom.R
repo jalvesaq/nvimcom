@@ -27,9 +27,6 @@
     if(is.null(getOption("nvimcom.texerrs")))
         options(nvimcom.texerrs = TRUE)
 
-    if(is.null(getOption("nvimcom.alwaysls")))
-        options(nvimcom.alwaysls = TRUE)
-
     if(is.null(getOption("nvimcom.labelerr")))
         options(nvimcom.labelwarn = TRUE)
 
@@ -57,7 +54,6 @@
            as.integer(getOption("nvimcom.opendf")),
            as.integer(getOption("nvimcom.openlist")),
            as.integer(getOption("nvimcom.allnames")),
-           as.integer(getOption("nvimcom.alwaysls")),
            as.integer(getOption("nvimcom.labelerr")),
            path.package("nvimcom"),
            as.character(utils::packageVersion("nvimcom")),

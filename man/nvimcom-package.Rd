@@ -16,7 +16,6 @@
     nvimcom.opendf   \tab Show data.frames elements.             \tab TRUE    \cr
     nvimcom.openlist \tab Show lists elements.                   \tab FALSE   \cr
     nvimcom.allnames \tab Show .GlobalEnv hidden objects.        \tab FALSE   \cr
-    nvimcom.alwaysls \tab Update the Object Browser more.        \tab TRUE    \cr
     nvimcom.labelerr \tab Warn if label is not \samp{character}. \tab TRUE    \cr
     nvimcom.texerrs  \tab Output TeX errors and warnings.        \tab TRUE    \cr
     nvimcom.vimpager \tab Show R documentation in Nvim.          \tab TRUE    \cr
@@ -24,9 +23,11 @@
 
   The \samp{nvimcom.verbose} option controls the amount of debugging
   information printed on R Console. If the value is 1, the package version is
-  output on startup. Higher values, up to 4, will make the package print
-  information verbosely which is useful only if you want either to fix a bug
-  or to understand how nvimcom works.
+  output on startup. If the value is 2, the time required to update the Object
+  Browser will be printed. This is useful if you suspect that R is noticeably
+  slower when the Object Browser is open in the Nvim-R plugin. Higher values,
+  up to 4, will make the package print information verbosely which is useful
+  only if you want to either fix a bug or understand how nvimcom works.
 
   By default, when a \samp{data.frame} appears in the Object Browser for the
   first time, its elements are immediately displayed, but the elements of a
@@ -35,10 +36,6 @@
   and \samp{nvimcom.openlist} controls the initial status (either opened or
   closed) of, respectively, data.frames and lists. The options are ignored for
   data.frames and lists of libraries which are always started closed.
-
-  If the value of \samp{nvimcom.alwaysls} is \samp{FALSE}, the Object Browser
-  will update the R's workspace list of objects only when the number of
-  objects changes.
 
   If an object R's workspace has the attribute \samp{label}, it is displayed
   in Nvim's Object Browser. If the \samp{label} attribute is not of class
