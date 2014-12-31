@@ -998,9 +998,11 @@ static void *nvimcom_server_thread(void *arg)
         REprintf("Error: Could not write to '%s'. [nvimcom]\n", fn);
     } else {
 #ifdef _WIN64
-        fprintf(f, "%s\n%s\n%d\n%" PRId64 "\n", nvimcom_version, nvimcom_home, bindportn, R_PID);
+        fprintf(f, "%s\n%s\n%d\n%" PRId64 "\n",
+                nvimcom_version, nvimcom_home, bindportn, R_PID);
 #else
-        fprintf(f, "%s\n%s\n%d\n%d\n", nvimcom_version, nvimcom_home, bindportn, R_PID);
+        fprintf(f, "%s\n%s\n%d\n%d\n",
+                nvimcom_version, nvimcom_home, bindportn, R_PID);
 #endif
 #ifdef WIN32
         HWND myHandle = GetForegroundWindow();
@@ -1127,10 +1129,10 @@ static void *nvimcom_server_thread(void *arg)
                 bbuf++;
                 status = atoi(bbuf);
                 ListStatus *tmp = firstList;
-                if(status == 1 || status == 3){
+                if(status < 2){
                     while(tmp){
                         if(strstr(tmp->key, "package:") != tmp->key)
-                            tmp->status = 1;
+                            tmp->status = status;
                         tmp = tmp->next;
                     }
 #ifdef WIN32
@@ -1140,7 +1142,8 @@ static void *nvimcom_server_thread(void *arg)
 #endif
                 } else {
                     while(tmp){
-                        tmp->status = 0;
+                        if(strstr(tmp->key, "package:") == tmp->key)
+                            tmp->status = 0;
                         tmp = tmp->next;
                     }
                     openclosel = 1;

@@ -126,7 +126,7 @@ static void NeovimServer()
 #endif
 
     // Register the port:
-    printf("call RSetNeovimPort('%d')\n", bindportn);
+    printf("call RSetMyPort('%d')\n", bindportn);
     fflush(stdout);
 
     /* Read datagrams and reply to sender */

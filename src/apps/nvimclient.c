@@ -10,10 +10,8 @@
 #include <netdb.h>
 #endif
 
-static char VimComPort[32];
-
 #ifndef WIN32
-static void SendToVimCom(const char *msg)
+static void SendToNvimcom(const char *port, const char *msg)
 {
     struct addrinfo hints;
     struct addrinfo *result, *rp;
@@ -28,7 +26,7 @@ static void SendToVimCom(const char *msg)
     hints.ai_flags = 0;
     hints.ai_protocol = 0;
 
-    a = getaddrinfo("127.0.0.1", VimComPort, &hints, &result);
+    a = getaddrinfo("127.0.0.1", port, &hints, &result);
     if (a != 0) {
         fprintf(stderr, "Neovim client error [getaddrinfo]: %s.\n", gai_strerror(a));
         return;
@@ -62,7 +60,7 @@ static void SendToVimCom(const char *msg)
 #endif
 
 #ifdef WIN32
-static void SendToVimCom(const char *msg)
+static void SendToNvimcom(const char *port, const char *msg)
 {
 
     WSADATA wsaData;
@@ -78,7 +76,7 @@ static void SendToVimCom(const char *msg)
     }
 
     peer_addr.sin_family = AF_INET;
-    peer_addr.sin_port = htons(atoi(VimComPort));
+    peer_addr.sin_port = htons(atoi(port));
     peer_addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
     if(connect(sfd, (struct sockaddr *)&peer_addr, sizeof(peer_addr)) < 0){
         fprintf(stderr, "Neovim client could not connect.\n");
@@ -98,14 +96,18 @@ static void SendToVimCom(const char *msg)
 
 int main(int argc, char **argv){
     char line[1024];
-
-    strncpy(VimComPort, argv[1], 31);
+    char *msg;
 
     while(fgets(line, 1023, stdin)){
         for(int i = 0; i < strlen(line); i++)
             if(line[i] == '\n')
                 line[i] = 0;
-        SendToVimCom(line);
+        msg = line;
+        while(*msg != ' ')
+            msg++;
+        *msg = 0;
+        msg++;
+        SendToNvimcom(line, msg);
     }
     return 0;
 }
