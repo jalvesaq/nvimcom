@@ -871,11 +871,9 @@ static void *nvimcom_server_thread(void *arg)
 #endif
 {
     unsigned short bindportn = 10000;
-    ssize_t nsent;
     ssize_t nread;
     int bsize = 5012;
     char buf[bsize];
-    char rep[bsize];
     int result;
 
 #ifdef WIN32
@@ -1019,8 +1017,6 @@ static void *nvimcom_server_thread(void *arg)
     /* Read datagrams and reply to sender */
     for (;;) {
         memset(buf, 0, bsize);
-        memset(rep, 0, bsize);
-        strcpy(rep, "UNKNOWN");
 
 #ifdef WIN32
         nread = recvfrom(sfd, buf, bsize, 0,
@@ -1055,7 +1051,6 @@ static void *nvimcom_server_thread(void *arg)
                 bbuf++;
                 strcpy(edsrvr, bbuf);
                 nvimcom_del_newline(edsrvr);
-                sprintf(rep, "Editor server name set to %s\n", edsrvr);
                 break;
             case 2: // Set Object Browser server name or port number
                 bbuf = buf;
@@ -1063,11 +1058,8 @@ static void *nvimcom_server_thread(void *arg)
                 objbr_auto = 1;
                 strcpy(obsrvr, bbuf);
                 nvimcom_del_newline(obsrvr);
-                sprintf(rep, "Object Browser server name set to %s\n", obsrvr);
 #ifdef WIN32
-                if(r_is_busy){
-                    strcpy(rep, "R is busy.");
-                } else {
+                if(!r_is_busy){
                     nvimcom_list_env();
                     nvimcom_list_libs();
                 }
@@ -1080,19 +1072,17 @@ static void *nvimcom_server_thread(void *arg)
 #ifdef WIN32
             case 3: // Set R as busy
                 r_is_busy = 1;
-                strcpy(rep, "R set as busy.");
                 break;
 #endif
             case 4: // Stop automatic update of Object Browser info
                 objbr_auto = 0;
+                memset(obbrbuf1, 0, obbrbufzise);
                 break;
             /* case 5: Update OB (Neovim does not need this) */
             case 6: // Toggle list status
 #ifdef WIN32
-                if(r_is_busy){
-                    strcpy(rep, "R is busy.");
+                if(r_is_busy)
                     break;
-                }
 #endif
                 bbuf = buf;
                 bbuf++;
@@ -1115,14 +1105,12 @@ static void *nvimcom_server_thread(void *arg)
 #ifndef WIN32
                 nvimcom_fire();
 #endif
-                strcpy(rep, "OK");
                 break;
             case 7: // Close/open all lists
 #ifdef WIN32
-                if(r_is_busy){
-                    strcpy(rep, "R is busy.");
+                if(r_is_busy)
                     break;
-                }
+
                 toggling_list = 1;
 #endif
                 bbuf = buf;
@@ -1168,9 +1156,7 @@ static void *nvimcom_server_thread(void *arg)
                 if(strstr(bbuf, getenv("NVIMR_ID")) == bbuf){
                     bbuf += strlen(getenv("NVIMR_ID"));
 #ifdef WIN32
-                    if(r_is_busy)
-                        strcpy(rep, "R is busy.");
-                    else
+                    if(!r_is_busy)
                         nvimcom_eval_expr(bbuf);
 #else
                     strncpy(flag_eval, bbuf, 510);
@@ -1184,14 +1170,6 @@ static void *nvimcom_server_thread(void *arg)
                 REprintf("\nError [nvimcom]: Invalid message received: %s\n", buf);
                 break;
         }
-
-        nsent = strlen(rep);
-        if (sendto(sfd, rep, nsent, 0, (struct sockaddr *) &peer_addr, peer_addr_len) != nsent)
-            REprintf("Error sending response. [nvimcom]\n");
-
-        if(verbose > 2)
-            REprintf("nvimcom sent: %s\n", rep);
-
     }
 #ifdef WIN32
     REprintf("nvimcom: Finished receiving. Closing socket.\n");
