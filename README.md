@@ -8,7 +8,7 @@ server in R to receive messages from the Neovim plugin [Nvim-R].
 The easiest way to install nvimcom is to use the [devtools] package.
 
 ```s
-devtools::install_github("nvimcom", "jalvesaq")
+devtools::install_github("jalvesaq/nvimcom")
 ```
 
 To manually download and install nvimcom, do the following in a terminal
