@@ -8,7 +8,7 @@
 ###############################################################
 
 .onLoad <- function(libname, pkgname) {
-    if(Sys.getenv("NVIMR_TMPDIR") == "" || Sys.getenv("NVIMR_TMPDIR") == "None")
+    if(Sys.getenv("NVIMR_TMPDIR") == "")
         return(invisible(NULL))
     library.dynam("nvimcom", pkgname, libname, local = FALSE)
 
@@ -31,16 +31,16 @@
         options(nvimcom.labelwarn = TRUE)
 
     if(Sys.getenv("NVIMR_SVRNM") %in% c("", "MacVim", "NoClientServer", "NoServerName"))
-        options(nvimcom.vimpager = FALSE)
-    if(is.null(getOption("nvimcom.vimpager"))){
-        options(nvimcom.vimpager = TRUE)
+        options(nvimcom.nvimpager = FALSE)
+    if(is.null(getOption("nvimcom.nvimpager"))){
+        options(nvimcom.nvimpager = TRUE)
     }
-    if(getOption("nvimcom.vimpager"))
+    if(getOption("nvimcom.nvimpager"))
         options(pager = nvim.hmsg)
 }
 
 .onAttach <- function(libname, pkgname) {
-    if(Sys.getenv("NVIMR_TMPDIR") == "" || Sys.getenv("NVIMR_TMPDIR") == "None")
+    if(Sys.getenv("NVIMR_TMPDIR") == "")
         return(invisible(NULL))
     if(version$os == "mingw32")
         termenv <- "MinGW"
@@ -58,10 +58,6 @@
            path.package("nvimcom"),
            as.character(utils::packageVersion("nvimcom")),
            PACKAGE="nvimcom")
-    }
-    if(termenv == "NeovimTerm"){
-        # "pager" and "editor" can't be optional because Neovim buffer isn't a real terminal.
-        options(pager = nvim.hmsg, editor = nvim.edit)
     }
 }
 

@@ -11,14 +11,14 @@
   control the nvimcom behavior:
 
   \tabular{lll}{
-    Option          \tab Description                            \tab Default \cr
-    nvimcom.verbose  \tab Print information.                     \tab 0       \cr
-    nvimcom.opendf   \tab Show data.frames elements.             \tab TRUE    \cr
-    nvimcom.openlist \tab Show lists elements.                   \tab FALSE   \cr
-    nvimcom.allnames \tab Show .GlobalEnv hidden objects.        \tab FALSE   \cr
-    nvimcom.labelerr \tab Warn if label is not \samp{character}. \tab TRUE    \cr
-    nvimcom.texerrs  \tab Output TeX errors and warnings.        \tab TRUE    \cr
-    nvimcom.vimpager \tab Show R documentation in Nvim.          \tab TRUE    \cr
+    Option            \tab Description                            \tab Default \cr
+    nvimcom.verbose   \tab Print information.                     \tab 0       \cr
+    nvimcom.opendf    \tab Show data.frames elements.             \tab TRUE    \cr
+    nvimcom.openlist  \tab Show lists elements.                   \tab FALSE   \cr
+    nvimcom.allnames  \tab Show .GlobalEnv hidden objects.        \tab FALSE   \cr
+    nvimcom.labelerr  \tab Warn if label is not \samp{character}. \tab TRUE    \cr
+    nvimcom.texerrs   \tab Output TeX errors and warnings.        \tab TRUE    \cr
+    nvimcom.nvimpager \tab Show R documentation in Nvim.          \tab TRUE    \cr
   }
 
   The \samp{nvimcom.verbose} option controls the amount of debugging
@@ -47,7 +47,7 @@
   will be output to R Console at the end of the compilation. So, you do not
   have to scroll the R Console seeking for these messages.
 
-  If the value of \samp{nvimcom.vimpager} is true, the pager becomes a function
+  If the value of \samp{nvimcom.nvimpager} is true, the pager becomes a function
   that will open R documentation in Nvim (If it does not work for you, see the
   Nvim-R section \samp{r-plugin-nox}).
 
