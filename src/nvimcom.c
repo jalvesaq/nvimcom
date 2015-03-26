@@ -1046,13 +1046,13 @@ static void *nvimcom_server_thread(void *arg)
         }
 
         switch(buf[0]){
-            case 1: // Set Editor server name or port number
+            case 1: // Set Editor server port number
                 bbuf = buf;
                 bbuf++;
                 strcpy(edsrvr, bbuf);
                 nvimcom_del_newline(edsrvr);
                 break;
-            case 2: // Set Object Browser server name or port number
+            case 2: // Set Object Browser server port number
                 bbuf = buf;
                 bbuf++;
                 objbr_auto = 1;
@@ -1204,17 +1204,6 @@ void nvimcom_Start(int *vrb, int *odf, int *ols, int *anm, int *lbe, char **pth,
             strncpy(nvimsecr, getenv("NVIMR_SECRET"), 127);
         else
             REprintf("nvimcom: Environment variable NVIMR_SECRET is missing.\n");
-        char *srvr = getenv("NVIMR_SVRNM");
-        if(srvr){
-            if(strstr(srvr, "Neovim_") == NULL){
-                REprintf("Warning: this version of nvimcom was built only for Neovim.\nThere is no support for either X11 or Windows 'clientserver' feature.\n");
-            }
-        } else {
-            if(verbose > -1)
-                REprintf("nvimcom: Neovim server port is unknown.\n");
-        }
-        if(verbose > 1)
-            Rprintf("nvimcom: NVIMR_SVRNM=%s\n", srvr);
     } else {
         if(verbose)
             REprintf("nvimcom: It seems that R was not started by Neovim. The communication with Nvim-R will not work.\n");

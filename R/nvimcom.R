@@ -30,8 +30,6 @@
     if(is.null(getOption("nvimcom.labelerr")))
         options(nvimcom.labelwarn = TRUE)
 
-    if(Sys.getenv("NVIMR_SVRNM") %in% c("", "MacVim", "NoClientServer", "NoServerName"))
-        options(nvimcom.nvimpager = FALSE)
     if(is.null(getOption("nvimcom.nvimpager"))){
         options(nvimcom.nvimpager = TRUE)
     }
