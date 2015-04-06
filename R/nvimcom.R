@@ -1,10 +1,10 @@
 # This file is part of nvimcom R package
-# 
+#
 # It is distributed under the GNU General Public License.
 # See the file ../LICENSE for details.
-# 
+#
 # (c) 2011 Jakson Aquino: jalvesaq@gmail.com
-# 
+#
 ###############################################################
 
 .onLoad <- function(libname, pkgname) {
@@ -15,22 +15,16 @@
     if(is.null(getOption("nvimcom.verbose")))
         options(nvimcom.verbose = 0)
 
-    if(is.null(getOption("nvimcom.opendf")))
+    # The remaining options are set by Neovim. Don't try to set them in your
+    # ~/.Rprofile because they will be overridden here:
+    if(file.exists(paste0(Sys.getenv("NVIMR_TMPDIR"), "/start_options.R"))){
+        source(paste0(Sys.getenv("NVIMR_TMPDIR"), "/start_options.R"))
+    } else {
         options(nvimcom.opendf = TRUE)
-
-    if(is.null(getOption("nvimcom.openlist")))
         options(nvimcom.openlist = FALSE)
-
-    if(is.null(getOption("nvimcom.allnames")))
         options(nvimcom.allnames = FALSE)
-
-    if(is.null(getOption("nvimcom.texerrs")))
         options(nvimcom.texerrs = TRUE)
-
-    if(is.null(getOption("nvimcom.labelerr")))
-        options(nvimcom.labelwarn = TRUE)
-
-    if(is.null(getOption("nvimcom.nvimpager"))){
+        options(nvimcom.labelerr = TRUE)
         options(nvimcom.nvimpager = TRUE)
     }
     if(getOption("nvimcom.nvimpager"))

@@ -10,59 +10,26 @@
   names of objects which begin with a dot are omitted. The following options
   control the nvimcom behavior:
 
-  \tabular{lll}{
-    Option            \tab Description                            \tab Default \cr
-    nvimcom.verbose   \tab Print information.                     \tab 0       \cr
-    nvimcom.opendf    \tab Show data.frames elements.             \tab TRUE    \cr
-    nvimcom.openlist  \tab Show lists elements.                   \tab FALSE   \cr
-    nvimcom.allnames  \tab Show .GlobalEnv hidden objects.        \tab FALSE   \cr
-    nvimcom.labelerr  \tab Warn if label is not \samp{character}. \tab TRUE    \cr
-    nvimcom.texerrs   \tab Output TeX errors and warnings.        \tab TRUE    \cr
-    nvimcom.nvimpager \tab Show R documentation in Nvim.          \tab TRUE    \cr
-  }
-
   The \samp{nvimcom.verbose} option controls the amount of debugging
-  information printed on R Console. If the value is 1, the package version is
-  output on startup. If the value is 2, the time required to update the Object
-  Browser will be printed. This is useful if you suspect that R is noticeably
-  slower when the Object Browser is open in the Nvim-R plugin. Higher values,
-  up to 4, will make the package print information verbosely which is useful
-  only if you want to either fix a bug or understand how nvimcom works.
+  information printed on R Console. Its default value is 0. If the value is 1,
+  the package version will be output on startup. If the value is 2, the time
+  required to update the Object Browser will be printed. This is useful if you
+  suspect that R is noticeably slower when the Object Browser is open in the
+  Nvim-R plugin. Higher values, up to 4, will make the package print
+  information verbosely which is useful only if you want to either fix a bug
+  or understand how nvimcom works.
 
-  By default, when a \samp{data.frame} appears in the Object Browser for the
-  first time, its elements are immediately displayed, but the elements of a
-  \samp{list} are displayed only if it is explicitly opened (see the
-  Nvim-R documentation for details). The options \samp{nvimcom.opendf}
-  and \samp{nvimcom.openlist} controls the initial status (either opened or
-  closed) of, respectively, data.frames and lists. The options are ignored for
-  data.frames and lists of libraries which are always started closed.
-
-  If an object R's workspace has the attribute \samp{label}, it is displayed
-  in Nvim's Object Browser. If the \samp{label} attribute is not of class
-  \samp{"character"}, and if  \samp{nvimcom.labelerr} is \samp{TRUE}, an error
-  message is printed in the Object Browser.
-
-  If the value of \samp{nvimcom.texerrs} is \samp{TRUE}, LaTeX errors and
-  warnings produced by the compilation of the .tex document into .pdf file
-  will be output to R Console at the end of the compilation. So, you do not
-  have to scroll the R Console seeking for these messages.
-
-  If the value of \samp{nvimcom.nvimpager} is true, the pager becomes a function
-  that will open R documentation in Nvim (If it does not work for you, see the
-  Nvim-R section \samp{r-plugin-nox}).
-
-  You should put some of the options above in your Rprofile rather than
-  setting them and loading the nvimcom package manually. Below is an
-  example of \samp{~/.Rprofile}
+  Below is an example of how to load \pkg{nvimcom}:
 
   \preformatted{
     if(interactive()){
-      options(nvimcom.verbose = 1,
-              nvimcom.texerrs = TRUE)
-      library(nvimcom)
+        if(Sys.getenv("NVIMR_TMPDIR") != ""){
+            options(nvimcom.verbose = 1)
+            library(nvimcom)
+        }
     }
-}
 
+  }
 }
 \seealso{\link[base]{Startup}}
 \author{
