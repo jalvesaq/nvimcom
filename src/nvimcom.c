@@ -581,12 +581,14 @@ static void nvimcom_eval_expr(const char *buf)
 #ifdef WIN32
     if(tcltkerr){
         fprintf(rep, "Error: \"nvimcom\" and \"tcltk\" packages are incompatible!\n");
+        fclose(rep);
         return;
     } else {
         if(objbr_auto == 0)
             nvimcom_checklibs();
         if(tcltkerr){
             fprintf(rep, "Error: \"nvimcom\" and \"tcltk\" packages are incompatible!\n");
+            fclose(rep);
             return;
         }
     }

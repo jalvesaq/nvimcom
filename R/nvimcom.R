@@ -97,3 +97,30 @@ nvim.edit <- function(name, file, title)
     unlink(finalB)
     return(invisible(x))
 }
+
+nvim_capture_source_output <- function(s, o)
+{
+    capture.output(base::source(s, echo = TRUE), file = o)
+    .C("nvimcom_msg_to_nvim", paste0("GetROutput('", o, "')"), PACKAGE="nvimcom")
+}
+
+nvim_viewdf <- function(oname)
+{
+    ok <- try(o <- get(oname, envir = .GlobalEnv), silent = TRUE)
+    if(inherits(ok, "try-error")){
+        .C("nvimcom_msg_to_nvim",
+           paste0("RWarningMsg('", '"', oname, '"', " not found in .GlobalEnv')"),
+           PACKAGE="nvimcom")
+        return(invisible(NULL))
+    }
+    if(is.data.frame(o) || is.matrix(o)){
+        write.table(o, sep = "\t", row.names = FALSE, quote = FALSE,
+                    file = paste0(Sys.getenv("NVIMR_TMPDIR"), "/Rinsert"))
+        .C("nvimcom_msg_to_nvim", paste0("RViewDF('", oname, "')"), PACKAGE="nvimcom")
+    } else {
+        .C("nvimcom_msg_to_nvim",
+           paste0("RWarningMsg('", '"', oname, '"', " is not a data.frame or matrix')"),
+           PACKAGE="nvimcom")
+    }
+    return(invisible(NULL))
+}

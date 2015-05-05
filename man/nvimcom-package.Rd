@@ -5,10 +5,7 @@
 \title{Allow the communication between Nvim and R }
 \description{This package provides a TCP/IP server to allow the communication
   between R and Nvim-R. It also has some functions called by the
-  plugin. By default, the elements of data.frames are shown in the object
-  browser, but not the elements of other types of lists, and, by default,
-  names of objects which begin with a dot are omitted. The following options
-  control the nvimcom behavior:
+  plugin.
 
   The \samp{nvimcom.verbose} option controls the amount of debugging
   information printed on R Console. Its default value is 0. If the value is 1,
@@ -19,7 +16,7 @@
   information verbosely which is useful only if you want to either fix a bug
   or understand how nvimcom works.
 
-  Below is an example of how to load \pkg{nvimcom}:
+  Below is an example of how to load \pkg{nvimcom} in your \samp{~/.Rprofile}:
 
   \preformatted{
     if(interactive()){
