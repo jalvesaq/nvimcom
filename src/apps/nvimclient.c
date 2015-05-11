@@ -2,16 +2,20 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <time.h>
 #ifdef WIN32
-#include <winsock2.h>
+#include <windows.h>
 #else
 #include <stdint.h>
 #include <sys/socket.h>
 #include <netdb.h>
 #endif
 
+static char NvimcomPort[16];
+static char OtherNvimPort[16];
+
 #ifndef WIN32
-static void SendToNvimcom(const char *port, const char *msg)
+static void SendToServer(const char *port, const char *msg)
 {
     struct addrinfo hints;
     struct addrinfo *result, *rp;
@@ -19,6 +23,10 @@ static void SendToNvimcom(const char *port, const char *msg)
     size_t len;
 
     /* Obtain address(es) matching host/port */
+    if(strncmp(port, "0", 15) == 0){
+        fprintf(stderr, "Neovim client: port is 0\n");
+        return;
+    }
 
     memset(&hints, 0, sizeof(struct addrinfo));
     hints.ai_family = AF_INET;
@@ -28,7 +36,7 @@ static void SendToNvimcom(const char *port, const char *msg)
 
     a = getaddrinfo("127.0.0.1", port, &hints, &result);
     if (a != 0) {
-        fprintf(stderr, "Neovim client error [getaddrinfo]: %s.\n", gai_strerror(a));
+        fprintf(stderr, "Neovim client error in getaddrinfo [port = '%s'] [msg = '%s']: %s\n", port, msg, gai_strerror(a));
         return;
     }
 
@@ -60,12 +68,16 @@ static void SendToNvimcom(const char *port, const char *msg)
 #endif
 
 #ifdef WIN32
-static void SendToNvimcom(const char *port, const char *msg)
+static void SendToServer(const char *port, const char *msg)
 {
-
     WSADATA wsaData;
     struct sockaddr_in peer_addr;
     SOCKET sfd;
+
+    if(strncmp(port, "0", 15) == 0){
+        fprintf(stderr, "Nvimcom port is 0 [nvimclient]\n");
+        return;
+    }
 
     WSAStartup(MAKEWORD(2, 2), &wsaData);
     sfd = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
@@ -92,23 +104,274 @@ static void SendToNvimcom(const char *port, const char *msg)
     if(closesocket(sfd) < 0)
         fprintf(stderr, "Neovim client error closing socket.\n");
 }
+
+HWND RConsole = NULL;
+
+static void FindRConsole(){
+    RConsole = FindWindow(NULL, "R Console (64-bit)");
+    if(!RConsole){
+        RConsole = FindWindow(NULL, "R Console (32-bit)");
+        if(!RConsole)
+            RConsole = FindWindow(NULL, "R Console");
+    }
+    if(!RConsole)
+        fprintf(stderr, "R Console not found\n");
+}
+
+static void RaiseRConsole(){
+    SetForegroundWindow(RConsole);
+    Sleep(0.05);
+}
+
+static void SendToRConsole(char *aString){
+    if(!RConsole)
+        FindRConsole();
+    if(!RConsole){
+        fprintf(stderr, "R Console not found\n");
+        return;
+    }
+
+    SendToServer(NvimcomPort, "\003Set R as busy [SendToRConsole()]");
+
+    const size_t len = strlen(aString) + 1;
+    HGLOBAL h =  GlobalAlloc(GMEM_MOVEABLE, len);
+    memcpy(GlobalLock(h), aString, len);
+    GlobalUnlock(h);
+    OpenClipboard(0);
+    EmptyClipboard();
+    SetClipboardData(CF_TEXT, h);
+    CloseClipboard();
+
+    // This is the most inefficient way of sending Ctrl+V. See:
+    // http://stackoverflow.com/questions/27976500/postmessage-ctrlv-without-raising-the-window
+    RaiseRConsole();
+    keybd_event(VK_CONTROL, 0, 0, 0);
+    keybd_event(VkKeyScan('V'), 0, KEYEVENTF_EXTENDEDKEY | 0, 0);
+    Sleep(0.05);
+    keybd_event(VkKeyScan('V'), 0, KEYEVENTF_EXTENDEDKEY | KEYEVENTF_KEYUP, 0);
+    keybd_event(VK_CONTROL, 0, KEYEVENTF_KEYUP, 0);
+}
+
+static void RClearConsole(){
+    if(!RConsole)
+        FindRConsole();
+    if(!RConsole){
+        fprintf(stderr, "R Console not found\n");
+        return;
+    }
+
+    RaiseRConsole();
+    keybd_event(VK_CONTROL, 0, 0, 0);
+    keybd_event(VkKeyScan('L'), 0, KEYEVENTF_EXTENDEDKEY | 0, 0);
+    Sleep(0.05);
+    keybd_event(VkKeyScan('L'), 0, KEYEVENTF_EXTENDEDKEY | KEYEVENTF_KEYUP, 0);
+    keybd_event(VK_CONTROL, 0, KEYEVENTF_KEYUP, 0);
+}
+
+static void SaveWinPos(char *cachedir){
+    if(!RConsole)
+        FindRConsole();
+    if(!RConsole){
+        fprintf(stderr, "R Console not found\n");
+        return;
+    }
+
+    HWND NvimHwnd = GetActiveWindow();
+    if(!NvimHwnd){
+        fprintf(stderr, "Could not get active window\n");
+        return;
+    }
+
+    RECT rcR, rcV;
+    if(!GetWindowRect(RConsole, &rcR)){
+        fprintf(stderr, "Could not get R Console position\n");
+        return;
+    }
+
+    if(!GetWindowRect(NvimHwnd, &rcV)){
+        fprintf(stderr, "Could not get GVim position\n");
+        return;
+    }
+
+    rcR.right = rcR.right - rcR.left;
+    rcR.bottom = rcR.bottom - rcR.top;
+    rcV.right = rcV.right - rcV.left;
+    rcV.bottom = rcV.bottom - rcV.top;
+
+    char fname[512];
+    snprintf(fname, 511, "%s/win_pos", cachedir);
+    FILE *f = fopen(fname, "w");
+    if(f == NULL){
+        fprintf(stderr, "Could not write to '%s'\n", fname);
+        return;
+    }
+    fprintf(f, "%ld\n%ld\n%ld\n%ld\n%ld\n%ld\n%ld\n%ld\n",
+            rcR.left, rcR.top, rcR.right, rcR.bottom,
+            rcV.left, rcV.top, rcV.right, rcV.bottom);
+    fclose(f);
+}
+
+static void ArrangeWindows(char *cachedir){
+    char fname[512];
+    snprintf(fname, 511, "%s/win_pos", cachedir);
+    FILE *f = fopen(fname, "r");
+    if(f == NULL){
+        fprintf(stderr, "Could not read '%s'\n", fname);
+        return;
+    }
+
+    if(!RConsole)
+        FindRConsole();
+    if(!RConsole){
+        fprintf(stderr, "R Console not found\n");
+        return;
+    }
+
+    HWND NvimHwnd = GetActiveWindow();
+    if(!NvimHwnd){
+        fprintf(stderr, "Could not get active window\n");
+        return;
+    }
+
+    RECT rcR, rcV;
+    char b[32];
+    if((fgets(b, 31, f))){
+        rcR.left = atol(b);
+    } else {
+        fprintf(stderr, "Error reading R left position\n");
+        return;
+    }
+    if((fgets(b, 31, f))){
+        rcR.top = atol(b);
+    } else {
+        fprintf(stderr, "Error reading R top position\n");
+        return;
+    }
+    if((fgets(b, 31, f))){
+        rcR.right = atol(b);
+    } else {
+        fprintf(stderr, "Error reading R right position\n");
+        return;
+    }
+    if((fgets(b, 31, f))){
+        rcR.bottom = atol(b);
+    } else {
+        fprintf(stderr, "Error reading R bottom position\n");
+        return;
+    }
+    if((fgets(b, 31, f))){
+        rcV.left = atol(b);
+    } else {
+        fprintf(stderr, "Error reading GVim left position\n");
+        return;
+    }
+    if((fgets(b, 31, f))){
+        rcV.top = atol(b);
+    } else {
+        fprintf(stderr, "Error reading GVim top position\n");
+        return;
+    }
+    if((fgets(b, 31, f))){
+        rcV.right = atol(b);
+    } else {
+        fprintf(stderr, "Error reading GVim right position\n");
+        return;
+    }
+    if((fgets(b, 31, f))){
+        rcV.bottom = atol(b);
+    } else {
+        fprintf(stderr, "Error reading GVim bottom position\n");
+        return;
+    }
+
+    if(!SetWindowPos(RConsole, HWND_NOTOPMOST,
+                rcR.left, rcR.top, rcR.right, rcR.bottom, 0)){
+        fprintf(stderr, "Error positioning GVim window\n");
+        return;
+    }
+    if(!SetWindowPos(NvimHwnd, HWND_NOTOPMOST,
+                rcV.left, rcV.top, rcV.right, rcV.bottom, 0)){
+        fprintf(stderr, "Error positioning GVim window\n");
+        return;
+    }
+}
 #endif
 
 int main(int argc, char **argv){
     char line[1024];
     char *msg;
+    memset(line, 0, 1024);
+    strcpy(NvimcomPort, "0");
+    strcpy(OtherNvimPort, "0");
+
+    FILE *df = NULL;
+    if(getenv("DEBUG_NVIMR")){
+        char fn[512];
+        snprintf(fn, 511, "nvimclient_debug_%ld", (long)time(NULL));
+        df = fopen(fn, "w");
+        if(df == NULL)
+            fprintf(stderr, "Error opening %s for writing\n", fn);
+    }
 
     while(fgets(line, 1023, stdin)){
+        if(df){
+            fprintf(df, "%s", line);
+            fflush(df);
+        }
+
         for(int i = 0; i < strlen(line); i++)
-            if(line[i] == '\n')
+            if(line[i] == '\n' || line[i] == '\r')
                 line[i] = 0;
         msg = line;
-        while(*msg != ' ')
-            msg++;
-        *msg = 0;
-        msg++;
-        SendToNvimcom(line, msg);
+        switch(*msg){
+            case 1: // SetPort (nvimcom)
+                msg++;
+                if(*msg == 'R'){
+                    msg++;
+                    strncpy(NvimcomPort, msg, 15);
+#ifdef WIN32
+                    if(msg[0] == '0')
+                        RConsole = NULL;
+#endif
+                } else {
+                    msg++;
+                    strncpy(OtherNvimPort, msg, 15);
+                }
+                break;
+            case 2: // SendToNvimcom
+                msg++;
+                SendToServer(NvimcomPort, msg);
+                break;
+#ifdef WIN32
+            case 3: // SendToRConsole
+                msg++;
+                strncat(line, "\n", 1023);
+                SendToRConsole(msg);
+                break;
+            case 4: // SaveWinPos
+                msg++;
+                SaveWinPos(msg);
+                break;
+            case 5: // ArrangeWindows
+                msg++;
+                ArrangeWindows(msg);
+                break;
+            case 6:
+                RClearConsole();
+                break;
+#else
+            case 7: // Message to external Neovim (Editor<-->ObjectBrowser)
+                msg++;
+                SendToServer(OtherNvimPort, msg);
+                break;
+#endif
+            default:
+                fprintf(stderr, "[nvimclient] Unknown command received: [%d] %s\n", line[0], msg);
+                break;
+        }
+        memset(line, 0, 1024);
     }
+    if(df)
+        fclose(df);
     return 0;
 }
-

@@ -42,6 +42,7 @@ static int labelerr = 1;
 static int nvimcom_is_utf8;
 static int nvimcom_failure = 0;
 static int nlibs = 0;
+static int needsfillmsg = 0;
 static int openclosel = 0;
 static char obsrvr[128];
 static char edsrvr[128];
@@ -61,8 +62,10 @@ static int has_new_obj = 0;
 
 #ifdef WIN32
 static int r_is_busy = 1;
+static int raise_neovim = 1;
 static int tcltkerr = 0;
 static int toggling_list = 0;
+static HWND NvimHwnd = NULL;
 #else
 static int fired = 0;
 static char flag_eval[512];
@@ -683,6 +686,7 @@ static int nvimcom_checklibs()
                 strcpy(builtlibs[j], libn);
                 sprintf(buf, "nvimcom:::nvim.buildomnils('%s')", libn);
                 nvimcom_eval_expr(buf);
+                needsfillmsg = 1;
                 break;
             }
         }
@@ -701,9 +705,6 @@ static int nvimcom_checklibs()
         fprintf(f, "%s\n", builtlibs[i]);
     }
     fclose(f);
-    if(edsrvr[0] != 0)
-        nvimcom_nvimclient("FillRLibList()", edsrvr);
-
     return(newnlibs);
 }
 
@@ -810,7 +811,15 @@ Rboolean nvimcom_task(SEXP expr, SEXP value, Rboolean succeeded,
     }
 #ifdef WIN32
     r_is_busy = 0;
+    if(raise_neovim){
+        raise_neovim = 0;
+        SetForegroundWindow(NvimHwnd);
+    }
 #endif
+    if(edsrvr[0] != 0 && needsfillmsg){
+        needsfillmsg = 0;
+        nvimcom_nvimclient("FillRLibList()", edsrvr);
+    }
     return(TRUE);
 }
 
@@ -866,11 +875,177 @@ static void nvimcom_fire()
 }
 #endif
 
-#ifdef WIN32
-static void nvimcom_server_thread(void *arg)
+static void nvimcom_save_running_info(int bindportn)
+{
+    char fn[512];
+    snprintf(fn, 510, "%s/nvimcom_running_%s", tmpdir, getenv("NVIMR_ID"));
+    FILE *f = fopen(fn, "w");
+    if(f == NULL){
+        REprintf("Error: Could not write to '%s'. [nvimcom]\n", fn);
+    } else {
+#ifdef _WIN64
+        fprintf(f, "%s\n%s\n%d\n%" PRId64 "\n",
+                nvimcom_version, nvimcom_home, bindportn, R_PID);
 #else
-static void *nvimcom_server_thread(void *arg)
+        fprintf(f, "%s\n%s\n%d\n%d\n",
+                nvimcom_version, nvimcom_home, bindportn, R_PID);
 #endif
+#ifdef WIN32
+        HWND myHandle = GetForegroundWindow();
+        snprintf(fn, 510, "%s/rconsole_hwnd_%s", tmpdir, getenv("NVIMR_SECRET"));
+        FILE *h = fopen(fn, "w");
+        if(h){
+            fwrite(&myHandle, sizeof(HWND), 1, h);
+            fclose(h);
+        }
+#endif
+        fclose(f);
+    }
+}
+
+static void nvimcom_parse_received_msg(char *buf)
+{
+    int status;
+    char *bbuf;
+
+    if(verbose > 2){
+        bbuf = buf;
+        if(buf[0] < 30)
+            bbuf++;
+        REprintf("nvimcom Received: [%d] %s\n", buf[0], bbuf);
+    }
+
+    switch(buf[0]){
+        case 1: // Set Editor server port number
+            bbuf = buf;
+            bbuf++;
+            strcpy(edsrvr, bbuf);
+            nvimcom_del_newline(edsrvr);
+            break;
+        case 2: // Set Object Browser server port number
+            bbuf = buf;
+            bbuf++;
+            objbr_auto = 1;
+            strcpy(obsrvr, bbuf);
+            nvimcom_del_newline(obsrvr);
+#ifdef WIN32
+            if(!r_is_busy){
+                nvimcom_list_env();
+                nvimcom_list_libs();
+            }
+#else
+            flag_lsenv = 1;
+            flag_lslibs = 1;
+            nvimcom_fire();
+#endif
+            break;
+#ifdef WIN32
+        case 3: // Set R as busy
+            r_is_busy = 1;
+            if(NvimHwnd)
+                raise_neovim = 1;
+            break;
+#endif
+        case 4: // Stop automatic update of Object Browser info
+            objbr_auto = 0;
+            memset(obbrbuf1, 0, obbrbufzise);
+            break;
+            /* case 5: Update OB (Neovim does not need this) */
+        case 6: // Toggle list status
+#ifdef WIN32
+            if(r_is_busy)
+                break;
+#endif
+            bbuf = buf;
+            bbuf++;
+            nvimcom_toggle_list_status(bbuf);
+            if(strstr(bbuf, "package:") == bbuf){
+                openclosel = 1;
+#ifdef WIN32
+                toggling_list = 1;
+                nvimcom_list_libs();
+#else
+                flag_lslibs = 1;
+#endif
+            } else {
+#ifdef WIN32
+                nvimcom_list_env();
+#else
+                flag_lsenv = 1;
+#endif
+            }
+#ifndef WIN32
+            nvimcom_fire();
+#endif
+            break;
+        case 7: // Close/open all lists
+#ifdef WIN32
+            if(r_is_busy)
+                break;
+
+            toggling_list = 1;
+#endif
+            bbuf = buf;
+            bbuf++;
+            status = atoi(bbuf);
+            ListStatus *tmp = firstList;
+            if(status < 2){
+                while(tmp){
+                    if(strstr(tmp->key, "package:") != tmp->key)
+                        tmp->status = status;
+                    tmp = tmp->next;
+                }
+#ifdef WIN32
+                nvimcom_list_env();
+#else
+                flag_lsenv = 1;
+#endif
+            } else {
+                while(tmp){
+                    if(strstr(tmp->key, "package:") == tmp->key)
+                        tmp->status = 0;
+                    tmp = tmp->next;
+                }
+                openclosel = 1;
+#ifdef WIN32
+                nvimcom_list_libs();
+                nvimcom_list_env();
+#else
+                flag_lsenv = 1;
+                flag_lslibs = 1;
+#endif
+            }
+#ifdef WIN32
+            if(status > 1 && obsrvr[0] != 0)
+                nvimcom_nvimclient("UpdateOB('both')", obsrvr);
+#else
+            nvimcom_fire();
+#endif
+            break;
+        case 8: // eval expression
+            bbuf = buf;
+            bbuf++;
+            if(strstr(bbuf, getenv("NVIMR_ID")) == bbuf){
+                bbuf += strlen(getenv("NVIMR_ID"));
+#ifdef WIN32
+                if(!r_is_busy)
+                    nvimcom_eval_expr(bbuf);
+#else
+                strncpy(flag_eval, bbuf, 510);
+                nvimcom_fire();
+#endif
+            } else {
+                REprintf("\nvimcom: received invalid NVIMR_ID.\n");
+            }
+            break;
+        default: // do nothing
+            REprintf("\nError [nvimcom]: Invalid message received: %s\n", buf);
+            break;
+    }
+}
+
+#ifndef WIN32
+static void *nvimcom_server_thread(void *arg)
 {
     unsigned short bindportn = 10000;
     ssize_t nread;
@@ -878,55 +1053,6 @@ static void *nvimcom_server_thread(void *arg)
     char buf[bsize];
     int result;
 
-#ifdef WIN32
-    WSADATA wsaData;
-    SOCKADDR_IN RecvAddr;
-    SOCKADDR_IN peer_addr;
-    int peer_addr_len = sizeof (peer_addr);
-    int nattp = 0;
-    int nfail = 0;
-    int lastfail = 0;
-
-    result = WSAStartup(MAKEWORD(2, 2), &wsaData);
-    if (result != NO_ERROR) {
-        REprintf("WSAStartup failed with error %d\n", result);
-        return;
-    }
-
-    while(bindportn < 10049){
-        bindportn++;
-        sfd = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
-        if (sfd == INVALID_SOCKET) {
-            REprintf("Error: socket failed with error %d [nvimcom]\n", WSAGetLastError());
-            return;
-        }
-
-        RecvAddr.sin_family = AF_INET;
-        RecvAddr.sin_port = htons(bindportn);
-        RecvAddr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
-
-        nattp++;
-        if(bind(sfd, (SOCKADDR *) & RecvAddr, sizeof (RecvAddr)) == 0)
-            break;
-        lastfail = WSAGetLastError();
-        nfail++;
-        if(verbose > 1)
-            REprintf("nvimcom: Could not bind to port %d [error  %d].\n", bindportn, lastfail);
-    }
-    if(nfail > 0 && verbose > 0){
-        if(nfail == 1)
-            REprintf("nvimcom: bind failed once with error %d.\n", lastfail);
-        else
-            REprintf("nvimcom: bind failed %d times and the last error was %d.\n", nfail, lastfail);
-        if(nattp > nfail)
-            REprintf("nvimcom: finally, bind to port %d was successful.\n", bindportn);
-    }
-    if(nattp == nfail){
-        REprintf("Error: Could not bind. [nvimcom]\n");
-        nvimcom_failure = 1;
-        return;
-    }
-#else
     struct addrinfo hints;
     struct addrinfo *rp;
     struct addrinfo *res;
@@ -980,54 +1106,20 @@ static void *nvimcom_server_thread(void *arg)
         nvimcom_failure = 1;
         return(NULL);
     }
-#endif
 
     if(verbose > 1)
         REprintf("nvimcom port: %d\n", bindportn);
 
-#ifndef WIN32
     flag_lslibs = 1;
     nvimcom_fire();
-#endif
 
     // Save a file to indicate that nvimcom is running
-    char fn[512];
-    snprintf(fn, 510, "%s/nvimcom_running_%s", tmpdir, getenv("NVIMR_ID"));
-    FILE *f = fopen(fn, "w");
-    if(f == NULL){
-        REprintf("Error: Could not write to '%s'. [nvimcom]\n", fn);
-    } else {
-#ifdef _WIN64
-        fprintf(f, "%s\n%s\n%d\n%" PRId64 "\n",
-                nvimcom_version, nvimcom_home, bindportn, R_PID);
-#else
-        fprintf(f, "%s\n%s\n%d\n%d\n",
-                nvimcom_version, nvimcom_home, bindportn, R_PID);
-#endif
-#ifdef WIN32
-        HWND myHandle = GetForegroundWindow();
-        snprintf(fn, 510, "%s/rconsole_hwnd_%s", tmpdir, getenv("NVIMR_SECRET"));
-        FILE *h = fopen(fn, "w");
-        if(h){
-            fwrite(&myHandle, sizeof(HWND), 1, h);
-            fclose(h);
-        }
-#endif
-        fclose(f);
-    }
+    nvimcom_save_running_info(bindportn);
 
     /* Read datagrams and reply to sender */
     for (;;) {
         memset(buf, 0, bsize);
 
-#ifdef WIN32
-        nread = recvfrom(sfd, buf, bsize, 0,
-                (SOCKADDR *) &peer_addr, &peer_addr_len);
-        if (nread == SOCKET_ERROR) {
-            REprintf("nvimcom: recvfrom failed with error %d\n", WSAGetLastError());
-            return;
-        }
-#else
         nread = recvfrom(sfd, buf, bsize, 0,
                 (struct sockaddr *) &peer_addr, &peer_addr_len);
         if (nread == -1){
@@ -1035,145 +1127,88 @@ static void *nvimcom_server_thread(void *arg)
                 REprintf("nvimcom: recvfrom failed\n");
             continue;     /* Ignore failed request */
         }
-#endif
 
-        int status;
-        char *bbuf;
-
-        if(verbose > 2){
-            bbuf = buf;
-            if(buf[0] < 30)
-                bbuf++;
-            REprintf("nvimcom Received: [%d] %s\n", buf[0], bbuf);
-        }
-
-        switch(buf[0]){
-            case 1: // Set Editor server port number
-                bbuf = buf;
-                bbuf++;
-                strcpy(edsrvr, bbuf);
-                nvimcom_del_newline(edsrvr);
-                break;
-            case 2: // Set Object Browser server port number
-                bbuf = buf;
-                bbuf++;
-                objbr_auto = 1;
-                strcpy(obsrvr, bbuf);
-                nvimcom_del_newline(obsrvr);
-#ifdef WIN32
-                if(!r_is_busy){
-                    nvimcom_list_env();
-                    nvimcom_list_libs();
-                }
-#else
-                flag_lsenv = 1;
-                flag_lslibs = 1;
-                nvimcom_fire();
-#endif
-                break;
-#ifdef WIN32
-            case 3: // Set R as busy
-                r_is_busy = 1;
-                break;
-#endif
-            case 4: // Stop automatic update of Object Browser info
-                objbr_auto = 0;
-                memset(obbrbuf1, 0, obbrbufzise);
-                break;
-            /* case 5: Update OB (Neovim does not need this) */
-            case 6: // Toggle list status
-#ifdef WIN32
-                if(r_is_busy)
-                    break;
-#endif
-                bbuf = buf;
-                bbuf++;
-                nvimcom_toggle_list_status(bbuf);
-                if(strstr(bbuf, "package:") == bbuf){
-                    openclosel = 1;
-#ifdef WIN32
-                    toggling_list = 1;
-                    nvimcom_list_libs();
-#else
-                    flag_lslibs = 1;
-#endif
-                } else {
-#ifdef WIN32
-                    nvimcom_list_env();
-#else
-                    flag_lsenv = 1;
-#endif
-                }
-#ifndef WIN32
-                nvimcom_fire();
-#endif
-                break;
-            case 7: // Close/open all lists
-#ifdef WIN32
-                if(r_is_busy)
-                    break;
-
-                toggling_list = 1;
-#endif
-                bbuf = buf;
-                bbuf++;
-                status = atoi(bbuf);
-                ListStatus *tmp = firstList;
-                if(status < 2){
-                    while(tmp){
-                        if(strstr(tmp->key, "package:") != tmp->key)
-                            tmp->status = status;
-                        tmp = tmp->next;
-                    }
-#ifdef WIN32
-                    nvimcom_list_env();
-#else
-                    flag_lsenv = 1;
-#endif
-                } else {
-                    while(tmp){
-                        if(strstr(tmp->key, "package:") == tmp->key)
-                            tmp->status = 0;
-                        tmp = tmp->next;
-                    }
-                    openclosel = 1;
-#ifdef WIN32
-                    nvimcom_list_libs();
-                    nvimcom_list_env();
-#else
-                    flag_lsenv = 1;
-                    flag_lslibs = 1;
-#endif
-                }
-#ifdef WIN32
-                if(status > 1 && obsrvr[0] != 0)
-                    nvimcom_nvimclient("UpdateOB('both')", obsrvr);
-#else
-                nvimcom_fire();
-#endif
-                break;
-            case 8: // eval expression
-                bbuf = buf;
-                bbuf++;
-                if(strstr(bbuf, getenv("NVIMR_ID")) == bbuf){
-                    bbuf += strlen(getenv("NVIMR_ID"));
-#ifdef WIN32
-                    if(!r_is_busy)
-                        nvimcom_eval_expr(bbuf);
-#else
-                    strncpy(flag_eval, bbuf, 510);
-                    nvimcom_fire();
-#endif
-                } else {
-                    REprintf("\nvimcom: received invalid NVIMR_ID.\n");
-                }
-                break;
-            default: // do nothing
-                REprintf("\nError [nvimcom]: Invalid message received: %s\n", buf);
-                break;
-        }
+        nvimcom_parse_received_msg(buf);
     }
+    return(NULL);
+}
+#endif
+
 #ifdef WIN32
+static void nvimcom_server_thread(void *arg)
+{
+    unsigned short bindportn = 10000;
+    ssize_t nread;
+    int bsize = 5012;
+    char buf[bsize];
+    int result;
+
+    WSADATA wsaData;
+    SOCKADDR_IN RecvAddr;
+    SOCKADDR_IN peer_addr;
+    int peer_addr_len = sizeof (peer_addr);
+    int nattp = 0;
+    int nfail = 0;
+    int lastfail = 0;
+
+    result = WSAStartup(MAKEWORD(2, 2), &wsaData);
+    if (result != NO_ERROR) {
+        REprintf("WSAStartup failed with error %d\n", result);
+        return;
+    }
+
+    while(bindportn < 10049){
+        bindportn++;
+        sfd = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+        if (sfd == INVALID_SOCKET) {
+            REprintf("Error: socket failed with error %d [nvimcom]\n", WSAGetLastError());
+            return;
+        }
+
+        RecvAddr.sin_family = AF_INET;
+        RecvAddr.sin_port = htons(bindportn);
+        RecvAddr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+
+        nattp++;
+        if(bind(sfd, (SOCKADDR *) & RecvAddr, sizeof (RecvAddr)) == 0)
+            break;
+        lastfail = WSAGetLastError();
+        nfail++;
+        if(verbose > 1)
+            REprintf("nvimcom: Could not bind to port %d [error  %d].\n", bindportn, lastfail);
+    }
+    if(nfail > 0 && verbose > 0){
+        if(nfail == 1)
+            REprintf("nvimcom: bind failed once with error %d.\n", lastfail);
+        else
+            REprintf("nvimcom: bind failed %d times and the last error was %d.\n", nfail, lastfail);
+        if(nattp > nfail)
+            REprintf("nvimcom: finally, bind to port %d was successful.\n", bindportn);
+    }
+    if(nattp == nfail){
+        REprintf("Error: Could not bind. [nvimcom]\n");
+        nvimcom_failure = 1;
+        return;
+    }
+
+    if(verbose > 1)
+        REprintf("nvimcom port: %d\n", bindportn);
+
+    // Save a file to indicate that nvimcom is running
+    nvimcom_save_running_info(bindportn);
+
+    /* Read datagrams and reply to sender */
+    for (;;) {
+        memset(buf, 0, bsize);
+
+        nread = recvfrom(sfd, buf, bsize, 0, (SOCKADDR *) &peer_addr, &peer_addr_len);
+        if (nread == SOCKET_ERROR) {
+            REprintf("nvimcom: recvfrom failed with error %d\n", WSAGetLastError());
+            return;
+        }
+
+        nvimcom_parse_received_msg(buf);
+    }
     REprintf("nvimcom: Finished receiving. Closing socket.\n");
     result = closesocket(sfd);
     if (result == SOCKET_ERROR) {
@@ -1182,10 +1217,8 @@ static void *nvimcom_server_thread(void *arg)
     }
     WSACleanup();
     return;
-#else
-    return(NULL);
-#endif
 }
+#endif
 
 
 void nvimcom_Start(int *vrb, int *odf, int *ols, int *anm, int *lbe, char **pth, char **vcv)
@@ -1251,6 +1284,7 @@ void nvimcom_Start(int *vrb, int *odf, int *ols, int *anm, int *lbe, char **pth,
 #endif
 
 #ifdef WIN32
+    NvimHwnd = FindWindow(NULL, "Neovim");
     tid = _beginthread(nvimcom_server_thread, 0, NULL);
 #else
     pthread_create(&tid, NULL, nvimcom_server_thread, NULL);
