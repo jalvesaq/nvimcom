@@ -2,9 +2,9 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
-#include <time.h>
 #ifdef WIN32
 #include <windows.h>
+HWND NvimHwnd = NULL;
 #else
 #include <stdint.h>
 #include <sys/socket.h>
@@ -12,6 +12,7 @@
 #endif
 
 static char NvimcomPort[16];
+static char MyOwnPort[16];
 static char OtherNvimPort[16];
 
 #ifndef WIN32
@@ -25,6 +26,7 @@ static void SendToServer(const char *port, const char *msg)
     /* Obtain address(es) matching host/port */
     if(strncmp(port, "0", 15) == 0){
         fprintf(stderr, "Neovim client: port is 0\n");
+        fflush(stderr);
         return;
     }
 
@@ -37,6 +39,7 @@ static void SendToServer(const char *port, const char *msg)
     a = getaddrinfo("127.0.0.1", port, &hints, &result);
     if (a != 0) {
         fprintf(stderr, "Neovim client error in getaddrinfo [port = '%s'] [msg = '%s']: %s\n", port, msg, gai_strerror(a));
+        fflush(stderr);
         return;
     }
 
@@ -54,6 +57,7 @@ static void SendToServer(const char *port, const char *msg)
 
     if (rp == NULL) {		   /* No address succeeded */
         fprintf(stderr, "Neovim client could not connect.\n");
+        fflush(stderr);
         return;
     }
 
@@ -62,6 +66,7 @@ static void SendToServer(const char *port, const char *msg)
     len = strlen(msg);
     if (write(s, msg, len) != len) {
         fprintf(stderr, "Neovim client partial/failed write.\n");
+        fflush(stderr);
         return;
     }
 }
@@ -76,6 +81,7 @@ static void SendToServer(const char *port, const char *msg)
 
     if(strncmp(port, "0", 15) == 0){
         fprintf(stderr, "Nvimcom port is 0 [nvimclient]\n");
+        fflush(stderr);
         return;
     }
 
@@ -84,6 +90,7 @@ static void SendToServer(const char *port, const char *msg)
 
     if(sfd < 0){
         fprintf(stderr, "Neovim client socket failed.\n");
+        fflush(stderr);
         return;
     }
 
@@ -92,17 +99,21 @@ static void SendToServer(const char *port, const char *msg)
     peer_addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
     if(connect(sfd, (struct sockaddr *)&peer_addr, sizeof(peer_addr)) < 0){
         fprintf(stderr, "Neovim client could not connect.\n");
+        fflush(stderr);
         return;
     }
 
     int len = strlen(msg);
     if (send(sfd, msg, len+1, 0) < 0) {
         fprintf(stderr, "Neovim client failed sending message.\n");
+        fflush(stderr);
         return;
     }
 
-    if(closesocket(sfd) < 0)
+    if(closesocket(sfd) < 0){
         fprintf(stderr, "Neovim client error closing socket.\n");
+        fflush(stderr);
+    }
 }
 
 HWND RConsole = NULL;
@@ -114,8 +125,20 @@ static void FindRConsole(){
         if(!RConsole)
             RConsole = FindWindow(NULL, "R Console");
     }
-    if(!RConsole)
+    if(!RConsole){
         fprintf(stderr, "R Console not found\n");
+        fflush(stderr);
+    }
+}
+
+static void RaiseNvimWindow()
+{
+    if(NvimHwnd){
+        SetForegroundWindow(NvimHwnd);
+    } else {
+        fprintf(stderr, "Nvim window handle not defined\n");
+        fflush(stderr);
+    }
 }
 
 static void RaiseRConsole(){
@@ -128,6 +151,7 @@ static void SendToRConsole(char *aString){
         FindRConsole();
     if(!RConsole){
         fprintf(stderr, "R Console not found\n");
+        fflush(stderr);
         return;
     }
 
@@ -157,6 +181,7 @@ static void RClearConsole(){
         FindRConsole();
     if(!RConsole){
         fprintf(stderr, "R Console not found\n");
+        fflush(stderr);
         return;
     }
 
@@ -173,23 +198,20 @@ static void SaveWinPos(char *cachedir){
         FindRConsole();
     if(!RConsole){
         fprintf(stderr, "R Console not found\n");
-        return;
-    }
-
-    HWND NvimHwnd = GetActiveWindow();
-    if(!NvimHwnd){
-        fprintf(stderr, "Could not get active window\n");
+        fflush(stderr);
         return;
     }
 
     RECT rcR, rcV;
     if(!GetWindowRect(RConsole, &rcR)){
         fprintf(stderr, "Could not get R Console position\n");
+        fflush(stderr);
         return;
     }
 
     if(!GetWindowRect(NvimHwnd, &rcV)){
-        fprintf(stderr, "Could not get GVim position\n");
+        fprintf(stderr, "Could not get Neovim position\n");
+        fflush(stderr);
         return;
     }
 
@@ -203,6 +225,7 @@ static void SaveWinPos(char *cachedir){
     FILE *f = fopen(fname, "w");
     if(f == NULL){
         fprintf(stderr, "Could not write to '%s'\n", fname);
+        fflush(stderr);
         return;
     }
     fprintf(f, "%ld\n%ld\n%ld\n%ld\n%ld\n%ld\n%ld\n%ld\n",
@@ -217,6 +240,7 @@ static void ArrangeWindows(char *cachedir){
     FILE *f = fopen(fname, "r");
     if(f == NULL){
         fprintf(stderr, "Could not read '%s'\n", fname);
+        fflush(stderr);
         return;
     }
 
@@ -224,12 +248,7 @@ static void ArrangeWindows(char *cachedir){
         FindRConsole();
     if(!RConsole){
         fprintf(stderr, "R Console not found\n");
-        return;
-    }
-
-    HWND NvimHwnd = GetActiveWindow();
-    if(!NvimHwnd){
-        fprintf(stderr, "Could not get active window\n");
+        fflush(stderr);
         return;
     }
 
@@ -239,59 +258,70 @@ static void ArrangeWindows(char *cachedir){
         rcR.left = atol(b);
     } else {
         fprintf(stderr, "Error reading R left position\n");
+        fflush(stderr);
         return;
     }
     if((fgets(b, 31, f))){
         rcR.top = atol(b);
     } else {
         fprintf(stderr, "Error reading R top position\n");
+        fflush(stderr);
         return;
     }
     if((fgets(b, 31, f))){
         rcR.right = atol(b);
     } else {
         fprintf(stderr, "Error reading R right position\n");
+        fflush(stderr);
         return;
     }
     if((fgets(b, 31, f))){
         rcR.bottom = atol(b);
     } else {
         fprintf(stderr, "Error reading R bottom position\n");
+        fflush(stderr);
         return;
     }
     if((fgets(b, 31, f))){
         rcV.left = atol(b);
     } else {
-        fprintf(stderr, "Error reading GVim left position\n");
+        fprintf(stderr, "Error reading Neovim left position\n");
+        fflush(stderr);
         return;
     }
     if((fgets(b, 31, f))){
         rcV.top = atol(b);
     } else {
-        fprintf(stderr, "Error reading GVim top position\n");
+        fprintf(stderr, "Error reading Neovim top position\n");
+        fflush(stderr);
         return;
     }
     if((fgets(b, 31, f))){
         rcV.right = atol(b);
     } else {
-        fprintf(stderr, "Error reading GVim right position\n");
+        fprintf(stderr, "Error reading Neovim right position\n");
+        fflush(stderr);
         return;
     }
     if((fgets(b, 31, f))){
         rcV.bottom = atol(b);
     } else {
-        fprintf(stderr, "Error reading GVim bottom position\n");
+        fprintf(stderr, "Error reading Neovim bottom position\n");
+        fflush(stderr);
         return;
     }
 
-    if(!SetWindowPos(RConsole, HWND_NOTOPMOST,
+    if(!SetWindowPos(RConsole, HWND_TOP,
                 rcR.left, rcR.top, rcR.right, rcR.bottom, 0)){
-        fprintf(stderr, "Error positioning GVim window\n");
+        fprintf(stderr, "Error positioning Neovim window\n");
+        fflush(stderr);
         return;
     }
-    if(!SetWindowPos(NvimHwnd, HWND_NOTOPMOST,
+    Sleep(0.05);
+    if(!SetWindowPos(NvimHwnd, HWND_TOP,
                 rcV.left, rcV.top, rcV.right, rcV.bottom, 0)){
-        fprintf(stderr, "Error positioning GVim window\n");
+        fprintf(stderr, "Error positioning Neovim window\n");
+        fflush(stderr);
         return;
     }
 }
@@ -303,15 +333,29 @@ int main(int argc, char **argv){
     memset(line, 0, 1024);
     strcpy(NvimcomPort, "0");
     strcpy(OtherNvimPort, "0");
+    strcpy(MyOwnPort, "0");
+
+    if(argc == 3){
+        SendToServer(argv[1], argv[2]);
+        return 0;
+    }
 
     FILE *df = NULL;
     if(getenv("DEBUG_NVIMR")){
-        char fn[512];
-        snprintf(fn, 511, "nvimclient_debug_%ld", (long)time(NULL));
-        df = fopen(fn, "w");
-        if(df == NULL)
-            fprintf(stderr, "Error opening %s for writing\n", fn);
+        df = fopen("nvimclient_debug", "w");
+        if(df == NULL){
+            fprintf(stderr, "Error opening \"nvimclient_debug\" for writing\n");
+            fflush(stderr);
+        }
     }
+
+#ifdef WIN32
+    NvimHwnd = FindWindow(NULL, "Neovim");
+    if(!NvimHwnd){
+        fprintf(stderr, "nvimclient.exe could not find \"Neovim\" window\n");
+        fflush(stderr);
+    }
+#endif
 
     while(fgets(line, 1023, stdin)){
         if(df){
@@ -324,7 +368,7 @@ int main(int argc, char **argv){
                 line[i] = 0;
         msg = line;
         switch(*msg){
-            case 1: // SetPort (nvimcom)
+            case 1: // SetPort
                 msg++;
                 if(*msg == 'R'){
                     msg++;
@@ -333,14 +377,29 @@ int main(int argc, char **argv){
                     if(msg[0] == '0')
                         RConsole = NULL;
 #endif
+                } else if(msg[0] == 'S'){
+                    msg++;
+                    strncpy(MyOwnPort, msg, 15);
                 } else {
                     msg++;
                     strncpy(OtherNvimPort, msg, 15);
                 }
                 break;
-            case 2: // SendToNvimcom
+            case 2: // Send message
                 msg++;
-                SendToServer(NvimcomPort, msg);
+                if(msg[0] == 'R'){
+                    msg++;
+                    SendToServer(NvimcomPort, msg);
+                } else if(msg[0] == 'S'){
+                    msg++;
+                    SendToServer(MyOwnPort, msg);
+                } else if(msg[0] == 'O'){
+                    msg++;
+                    SendToServer(OtherNvimPort, msg);
+                } else {
+                    fprintf(stderr, "[nvimclient] Invalid message to send: \"%s\"\n", msg);
+                    fflush(stderr);
+                }
                 break;
 #ifdef WIN32
             case 3: // SendToRConsole
@@ -359,14 +418,13 @@ int main(int argc, char **argv){
             case 6:
                 RClearConsole();
                 break;
-#else
-            case 7: // Message to external Neovim (Editor<-->ObjectBrowser)
-                msg++;
-                SendToServer(OtherNvimPort, msg);
+            case 7: // RaiseNvimWindow
+                RaiseNvimWindow();
                 break;
 #endif
             default:
                 fprintf(stderr, "[nvimclient] Unknown command received: [%d] %s\n", line[0], msg);
+                fflush(stderr);
                 break;
         }
         memset(line, 0, 1024);

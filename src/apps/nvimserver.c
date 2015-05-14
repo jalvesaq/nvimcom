@@ -4,6 +4,7 @@
 #include <ctype.h>
 #include <unistd.h>
 #include <sys/types.h>
+#include <signal.h>
 
 #ifdef WIN32
 #include <winsock2.h>
@@ -11,28 +12,32 @@
 #include <stdint.h>
 #include <sys/socket.h>
 #include <netdb.h>
-#include <signal.h>
 #endif
 
 static char VimSecret[128];
 static int VimSecretLen;
+FILE *df = NULL;
 
-
-FILE *RegisterPort(int bindportn)
+void HandleSigTerm(int s)
 {
-    FILE *df = NULL;
+    if(df){
+        fprintf(df, "HandleSigTerm called\n");
+        fflush(df);
+    }
+    exit(0);
+}
+
+static void RegisterPort(int bindportn)
+{
     // Register the port:
     printf("call RSetMyPort('%d')\n", bindportn);
     fflush(stdout);
 
     if(getenv("DEBUG_NVIMR")){
-        char fn[512];
-        snprintf(fn, 511, "nvimserver_debug_%d", bindportn);
-        df = fopen(fn, "w");
+        df = fopen("nvimserver_debug", "w");
         if(df == NULL)
-            fprintf(stderr, "Error opening %s for writing\n", fn);
+            fprintf(stderr, "Error opening \"nvimserver_debug\" for writing\n");
     }
-    return(df);
 }
 
 static void ParseMsg(char *buf, FILE *df)
@@ -43,7 +48,7 @@ static void ParseMsg(char *buf, FILE *df)
         fflush(df);
     }
 
-    if(strstr(bbuf, VimSecret)){
+    if(strstr(bbuf, VimSecret) == bbuf){
         bbuf += VimSecretLen;
         printf("%s\n", bbuf);
         fflush(stdout);
@@ -61,7 +66,6 @@ static void NeovimServer()
     int bsize = 5012;
     char buf[bsize];
     int result;
-    FILE *df;
 
     struct addrinfo hints;
     struct addrinfo *rp;
@@ -116,7 +120,7 @@ static void NeovimServer()
         return;
     }
 
-    df = RegisterPort(bindportn);
+    RegisterPort(bindportn);
 
     /* Read datagrams and reply to sender */
     for (;;) {
@@ -129,6 +133,8 @@ static void NeovimServer()
             fflush(stderr);
             continue;     /* Ignore failed request */
         }
+        if(strstr(buf, "QUIT_NVINSERVER_NOW"))
+            break;
 
         ParseMsg(buf, df);
     }
@@ -146,7 +152,6 @@ static void NeovimServer()
     int bsize = 5012;
     char buf[bsize];
     int result;
-    FILE *df;
 
     WSADATA wsaData;
     SOCKADDR_IN RecvAddr;
@@ -191,7 +196,7 @@ static void NeovimServer()
         return;
     }
 
-    df = RegisterPort(bindportn);
+    RegisterPort(bindportn);
 
     /* Read datagrams and reply to sender */
     for (;;) {
@@ -205,11 +210,15 @@ static void NeovimServer()
             fflush(stderr);
             return;
         }
+        if(strstr(buf, "QUIT_NVINSERVER_NOW"))
+            break;
 
         ParseMsg(buf, df);
     }
-    fprintf(stderr, "Neovim server: Finished receiving. Closing socket.\n");
-    fflush(stderr);
+    if(df){
+        fprintf(df, "Neovim server: Finished receiving. Closing socket.\n");
+        fflush(df);
+    }
     result = closesocket(sfd);
     if (result == SOCKET_ERROR) {
         fprintf(stderr, "Neovim server: closesocket failed with error %d\n", WSAGetLastError());
@@ -231,6 +240,10 @@ int main(int argc, char **argv){
     }
     strncpy(VimSecret, getenv("NVIMR_SECRET"), 127);
     VimSecretLen = strlen(VimSecret);
+
+    // Finish immediately with SIGTERM
+    signal(SIGTERM, HandleSigTerm);
+
 #ifdef WIN32
     Sleep(1000);
 #else

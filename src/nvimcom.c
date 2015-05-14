@@ -15,7 +15,7 @@
 #include <sys/types.h>
 
 #ifdef WIN32
-#include <windows.h>
+#include <winsock2.h>
 #include <process.h>
 #ifdef _WIN64
 #include <inttypes.h>
@@ -62,10 +62,7 @@ static int has_new_obj = 0;
 
 #ifdef WIN32
 static int r_is_busy = 1;
-static int raise_neovim = 1;
 static int tcltkerr = 0;
-static int toggling_list = 0;
-static HWND NvimHwnd = NULL;
 #else
 static int fired = 0;
 static char flag_eval[512];
@@ -811,10 +808,6 @@ Rboolean nvimcom_task(SEXP expr, SEXP value, Rboolean succeeded,
     }
 #ifdef WIN32
     r_is_busy = 0;
-    if(raise_neovim){
-        raise_neovim = 0;
-        SetForegroundWindow(NvimHwnd);
-    }
 #endif
     if(edsrvr[0] != 0 && needsfillmsg){
         needsfillmsg = 0;
@@ -890,15 +883,6 @@ static void nvimcom_save_running_info(int bindportn)
         fprintf(f, "%s\n%s\n%d\n%d\n",
                 nvimcom_version, nvimcom_home, bindportn, R_PID);
 #endif
-#ifdef WIN32
-        HWND myHandle = GetForegroundWindow();
-        snprintf(fn, 510, "%s/rconsole_hwnd_%s", tmpdir, getenv("NVIMR_SECRET"));
-        FILE *h = fopen(fn, "w");
-        if(h){
-            fwrite(&myHandle, sizeof(HWND), 1, h);
-            fclose(h);
-        }
-#endif
         fclose(f);
     }
 }
@@ -942,8 +926,6 @@ static void nvimcom_parse_received_msg(char *buf)
 #ifdef WIN32
         case 3: // Set R as busy
             r_is_busy = 1;
-            if(NvimHwnd)
-                raise_neovim = 1;
             break;
 #endif
         case 4: // Stop automatic update of Object Browser info
@@ -962,14 +944,15 @@ static void nvimcom_parse_received_msg(char *buf)
             if(strstr(bbuf, "package:") == bbuf){
                 openclosel = 1;
 #ifdef WIN32
-                toggling_list = 1;
                 nvimcom_list_libs();
+                nvimcom_nvimclient("UpdateOB('libraries')", obsrvr);
 #else
                 flag_lslibs = 1;
 #endif
             } else {
 #ifdef WIN32
                 nvimcom_list_env();
+                nvimcom_nvimclient("UpdateOB('GlobalEnv')", obsrvr);
 #else
                 flag_lsenv = 1;
 #endif
@@ -983,7 +966,6 @@ static void nvimcom_parse_received_msg(char *buf)
             if(r_is_busy)
                 break;
 
-            toggling_list = 1;
 #endif
             bbuf = buf;
             bbuf++;
@@ -1016,8 +998,7 @@ static void nvimcom_parse_received_msg(char *buf)
 #endif
             }
 #ifdef WIN32
-            if(status > 1 && obsrvr[0] != 0)
-                nvimcom_nvimclient("UpdateOB('both')", obsrvr);
+            nvimcom_nvimclient("UpdateOB('both')", obsrvr);
 #else
             nvimcom_fire();
 #endif
@@ -1284,7 +1265,6 @@ void nvimcom_Start(int *vrb, int *odf, int *ols, int *anm, int *lbe, char **pth,
 #endif
 
 #ifdef WIN32
-    NvimHwnd = FindWindow(NULL, "Neovim");
     tid = _beginthread(nvimcom_server_thread, 0, NULL);
 #else
     pthread_create(&tid, NULL, nvimcom_server_thread, NULL);
