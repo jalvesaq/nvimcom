@@ -334,17 +334,18 @@ int main(int argc, char **argv){
     strcpy(OtherNvimPort, "0");
     strcpy(MyOwnPort, "0");
 
-    if(argc == 5){
-        snprintf(line, 1023, "%scall SyncTeX_backward('%s', %s)", argv[2], argv[3], argv[4]);
-        SendToServer(argv[1], line);
+    if(argc == 3 && getenv("NVIMR_PORT") && getenv("NVIMR_SECRET")){
+        snprintf(line, 1023, "%scall SyncTeX_backward('%s', %s)", getenv("NVIMR_SECRET"), argv[1], argv[2]);
+        SendToServer(getenv("NVIMR_PORT"), line);
+
         if(getenv("DEBUG_NVIMR")){
-            FILE *df1 = fopen("/tmp/nvimrclient_1_debug", "w");
+            FILE *df1 = fopen("/tmp/nvimrclient_1_debug", "a");
             if(df1 != NULL){
-                fprintf(df1, "%s %s %s %s\n", argv[1], argv[2], argv[3], argv[4]);
+                fprintf(df1, "%s %s %s %s\n", getenv("NVIMR_PORT"), getenv("NVIMR_SECRET"), argv[1], argv[2]);
                 fclose(df1);
             }
-            return 0;
         }
+        return 0;
     }
 
     FILE *df = NULL;
