@@ -1,13 +1,13 @@
 CC?=gcc
 CFLAGS+=-std=gnu99 -O2 -Wall
 
-all: nvimclient nvimserver
+all: nvimrclient nvimrserver
 
-nvimclient: nvimclient.c
-	$(CC) $(CFLAGS) nvimclient.c -o nvimclient
+nvimrclient: nvimrclient.c
+	$(CC) $(CFLAGS) nvimrclient.c -o nvimrclient
 
-nvimserver: nvimserver.c
-	$(CC) $(CFLAGS) nvimserver.c -o nvimserver
+nvimrserver: nvimrserver.c
+	$(CC) $(CFLAGS) nvimrserver.c -o nvimrserver
 
 clean:
 

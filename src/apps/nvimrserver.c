@@ -18,7 +18,7 @@ static char VimSecret[128];
 static int VimSecretLen;
 FILE *df = NULL;
 
-void HandleSigTerm(int s)
+static void HandleSigTerm(int s)
 {
     if(df){
         fprintf(df, "HandleSigTerm called\n");
@@ -34,9 +34,9 @@ static void RegisterPort(int bindportn)
     fflush(stdout);
 
     if(getenv("DEBUG_NVIMR")){
-        df = fopen("nvimserver_debug", "w");
+        df = fopen("nvimrserver_debug", "w");
         if(df == NULL)
-            fprintf(stderr, "Error opening \"nvimserver_debug\" for writing\n");
+            fprintf(stderr, "Error opening \"nvimrserver_debug\" for writing\n");
     }
 }
 
@@ -98,7 +98,7 @@ static void NeovimServer()
         sprintf(bindport, "%d", bindportn);
         result = getaddrinfo("127.0.0.1", bindport, &hints, &res);
         if(result != 0){
-            fprintf(stderr, "Neovim server: Error at getaddrinfo (%s)\n", gai_strerror(result));
+            fprintf(stderr, "Error at getaddrinfo (%s)\n", gai_strerror(result));
             fflush(stderr);
             return;
         }
@@ -115,7 +115,7 @@ static void NeovimServer()
     }
 
     if (rp == NULL) {        /* No address succeeded */
-        fprintf(stderr, "Neovim server: Could not bind.\n");
+        fprintf(stderr, "Could not bind\n");
         fflush(stderr);
         return;
     }
@@ -129,7 +129,7 @@ static void NeovimServer()
         nread = recvfrom(sfd, buf, bsize, 0,
                 (struct sockaddr *) &peer_addr, &peer_addr_len);
         if (nread == -1){
-            fprintf(stderr, "Neovim server [port %d]: recvfrom failed\n", bindportn);
+            fprintf(stderr, "recvfrom failed [port %d]\n", bindportn);
             fflush(stderr);
             continue;     /* Ignore failed request */
         }
@@ -164,7 +164,7 @@ static void NeovimServer()
 
     result = WSAStartup(MAKEWORD(2, 2), &wsaData);
     if (result != NO_ERROR) {
-        fprintf(stderr, "Neovim server: WSAStartup failed with error %d.\n", result);
+        fprintf(stderr, "WSAStartup failed with error %d.\n", result);
         fflush(stderr);
         return;
     }
@@ -173,7 +173,7 @@ static void NeovimServer()
         bindportn++;
         sfd = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
         if (sfd == INVALID_SOCKET) {
-            fprintf(stderr, "Neovim server: socket failed with error %d\n", WSAGetLastError());
+            fprintf(stderr, "socket failed with error %d\n", WSAGetLastError());
             fflush(stderr);
             return;
         }
@@ -191,7 +191,7 @@ static void NeovimServer()
         // fflush(stderr);
     }
     if(nattp == nfail){
-        fprintf(stderr, "Neovim server: Could not bind.\n");
+        fprintf(stderr, "Could not bind\n");
         fflush(stderr);
         return;
     }
@@ -205,7 +205,7 @@ static void NeovimServer()
         nread = recvfrom(sfd, buf, bsize, 0,
                 (SOCKADDR *) &peer_addr, &peer_addr_len);
         if (nread == SOCKET_ERROR) {
-            fprintf(stderr, "Neovim server [port %d]: recvfrom failed with error %d\n",
+            fprintf(stderr, "recvfrom failed with error %d [port %d]\n",
                     bindportn, WSAGetLastError());
             fflush(stderr);
             return;
@@ -221,7 +221,7 @@ static void NeovimServer()
     }
     result = closesocket(sfd);
     if (result == SOCKET_ERROR) {
-        fprintf(stderr, "Neovim server: closesocket failed with error %d\n", WSAGetLastError());
+        fprintf(stderr, "closesocket failed with error %d\n", WSAGetLastError());
         fflush(stderr);
         return;
     }

@@ -152,16 +152,12 @@ ShowTexErrors <- function(x)
 OpenPDF <- function(x)
 {
     path <- sub("\\.tex$", ".pdf", x)
-    if(.Platform$OS.type == "windows" && identical(getOption("pdfviewer"), file.path(R.home("bin"), "open.exe"))){
-        shell.exec(path)
-    } else {
-        .C("nvimcom_msg_to_nvim", paste0("ROpenPDF('", getwd(), "/", path, "')"), PACKAGE="nvimcom")
-    }
+    .C("nvimcom_msg_to_nvim", paste0("ROpenPDF('", getwd(), "/", path, "')"), PACKAGE="nvimcom")
     return(invisible(NULL))
 }
 
 nvim.interlace.rnoweb <- function(rnowebfile, rnwdir, latexcmd, latexmk = TRUE, synctex = TRUE, bibtex = FALSE,
-                          knit = TRUE, buildpdf = TRUE, view = TRUE, quiet = TRUE, ...)
+                                  knit = TRUE, buildpdf = TRUE, view = TRUE, ...)
 {
     oldwd <- getwd()
     on.exit(setwd(oldwd))
@@ -198,30 +194,24 @@ nvim.interlace.rnoweb <- function(rnowebfile, rnwdir, latexcmd, latexmk = TRUE, 
         # From RStudio: Check for spaces in path (Sweave chokes on these)
         if(length(grep(" ", Sres)) > 0)
             stop(paste("Invalid filename: '", Sres, "' (TeX does not understand paths with spaces).", sep=""))
-        if(.Platform$OS.type == "windows"){
-            # From RStudio:
-            idx = !identical(.Platform$pkgType, "source")
-            tools::texi2dvi(file = Sres, pdf = TRUE, index = idx, quiet = quiet)
-        } else {
-            if(missing(latexcmd)){
-                if(latexmk){
-                    if(synctex)
-                        latexcmd = 'latexmk -pdflatex="pdflatex -file-line-error -synctex=1" -pdf'
-                    else
-                        latexcmd = 'latexmk -pdflatex="pdflatex -file-line-error" -pdf'
-                } else {
-                    if(synctex)
-                        latexcmd = "pdflatex -file-line-error -synctex=1"
-                    else
-                        latexcmd = "pdflatex -file-line-error"
-                }
+        if(missing(latexcmd)){
+            if(latexmk){
+                if(synctex)
+                    latexcmd = 'latexmk -pdflatex="pdflatex -file-line-error -synctex=1" -pdf'
+                else
+                    latexcmd = 'latexmk -pdflatex="pdflatex -file-line-error" -pdf'
+            } else {
+                if(synctex)
+                    latexcmd = "pdflatex -file-line-error -synctex=1"
+                else
+                    latexcmd = "pdflatex -file-line-error"
             }
+        }
+        system(paste(latexcmd, Sres))
+        if(bibtex){
+            system(paste("bibtex", sub("\\.tex$", ".aux", Sres)))
             system(paste(latexcmd, Sres))
-            if(bibtex){
-                system(paste("bibtex", sub("\\.tex$", ".aux", Sres)))
-                system(paste(latexcmd, Sres))
-                system(paste(latexcmd, Sres))
-            }
+            system(paste(latexcmd, Sres))
         }
         if(view)
             OpenPDF(Sres)

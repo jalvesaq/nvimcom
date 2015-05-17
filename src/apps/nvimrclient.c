@@ -5,6 +5,7 @@
 #ifdef WIN32
 #include <windows.h>
 HWND NvimHwnd = NULL;
+HWND RConsole = NULL;
 #else
 #include <stdint.h>
 #include <sys/socket.h>
@@ -25,7 +26,7 @@ static void SendToServer(const char *port, const char *msg)
 
     /* Obtain address(es) matching host/port */
     if(strncmp(port, "0", 15) == 0){
-        fprintf(stderr, "Neovim client: port is 0\n");
+        fprintf(stderr, "Port is 0\n");
         fflush(stderr);
         return;
     }
@@ -38,7 +39,7 @@ static void SendToServer(const char *port, const char *msg)
 
     a = getaddrinfo("127.0.0.1", port, &hints, &result);
     if (a != 0) {
-        fprintf(stderr, "Neovim client error in getaddrinfo [port = '%s'] [msg = '%s']: %s\n", port, msg, gai_strerror(a));
+        fprintf(stderr, "Error in getaddrinfo [port = '%s'] [msg = '%s']: %s\n", port, msg, gai_strerror(a));
         fflush(stderr);
         return;
     }
@@ -56,7 +57,7 @@ static void SendToServer(const char *port, const char *msg)
     }
 
     if (rp == NULL) {		   /* No address succeeded */
-        fprintf(stderr, "Neovim client could not connect.\n");
+        fprintf(stderr, "Could not connect.\n");
         fflush(stderr);
         return;
     }
@@ -65,7 +66,7 @@ static void SendToServer(const char *port, const char *msg)
 
     len = strlen(msg);
     if (write(s, msg, len) != len) {
-        fprintf(stderr, "Neovim client partial/failed write.\n");
+        fprintf(stderr, "Partial/failed write.\n");
         fflush(stderr);
         return;
     }
@@ -80,7 +81,7 @@ static void SendToServer(const char *port, const char *msg)
     SOCKET sfd;
 
     if(strncmp(port, "0", 15) == 0){
-        fprintf(stderr, "Nvimcom port is 0 [nvimclient]\n");
+        fprintf(stderr, "Port is 0\n");
         fflush(stderr);
         return;
     }
@@ -89,7 +90,7 @@ static void SendToServer(const char *port, const char *msg)
     sfd = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
 
     if(sfd < 0){
-        fprintf(stderr, "Neovim client socket failed.\n");
+        fprintf(stderr, "Socket failed\n");
         fflush(stderr);
         return;
     }
@@ -98,25 +99,23 @@ static void SendToServer(const char *port, const char *msg)
     peer_addr.sin_port = htons(atoi(port));
     peer_addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
     if(connect(sfd, (struct sockaddr *)&peer_addr, sizeof(peer_addr)) < 0){
-        fprintf(stderr, "Neovim client could not connect.\n");
+        fprintf(stderr, "Could not connect\n");
         fflush(stderr);
         return;
     }
 
     int len = strlen(msg);
     if (send(sfd, msg, len+1, 0) < 0) {
-        fprintf(stderr, "Neovim client failed sending message.\n");
+        fprintf(stderr, "Failed sending message\n");
         fflush(stderr);
         return;
     }
 
     if(closesocket(sfd) < 0){
-        fprintf(stderr, "Neovim client error closing socket.\n");
+        fprintf(stderr, "Error closing socket\n");
         fflush(stderr);
     }
 }
-
-HWND RConsole = NULL;
 
 static void FindRConsole(){
     RConsole = FindWindow(NULL, "R Console (64-bit)");
@@ -156,6 +155,7 @@ static void SendToRConsole(char *aString){
     }
 
     SendToServer(NvimcomPort, "\003Set R as busy [SendToRConsole()]");
+    RaiseRConsole();
 
     const size_t len = strlen(aString) + 1;
     HGLOBAL h =  GlobalAlloc(GMEM_MOVEABLE, len);
@@ -168,7 +168,6 @@ static void SendToRConsole(char *aString){
 
     // This is the most inefficient way of sending Ctrl+V. See:
     // http://stackoverflow.com/questions/27976500/postmessage-ctrlv-without-raising-the-window
-    RaiseRConsole();
     keybd_event(VK_CONTROL, 0, 0, 0);
     keybd_event(VkKeyScan('V'), 0, KEYEVENTF_EXTENDEDKEY | 0, 0);
     Sleep(0.05);
@@ -335,24 +334,37 @@ int main(int argc, char **argv){
     strcpy(OtherNvimPort, "0");
     strcpy(MyOwnPort, "0");
 
-    if(argc == 3){
-        SendToServer(argv[1], argv[2]);
-        return 0;
+    if(argc == 5){
+        snprintf(line, 1023, "%scall SyncTeX_backward('%s', %s)", argv[2], argv[3], argv[4]);
+        SendToServer(argv[1], line);
+        if(getenv("DEBUG_NVIMR")){
+            FILE *df1 = fopen("/tmp/nvimrclient_1_debug", "w");
+            if(df1 != NULL){
+                fprintf(df1, "%s %s %s %s\n", argv[1], argv[2], argv[3], argv[4]);
+                fclose(df1);
+            }
+            return 0;
+        }
     }
 
     FILE *df = NULL;
     if(getenv("DEBUG_NVIMR")){
-        df = fopen("nvimclient_debug", "w");
+        df = fopen("nvimrclient_debug", "w");
         if(df == NULL){
-            fprintf(stderr, "Error opening \"nvimclient_debug\" for writing\n");
+            fprintf(stderr, "Error opening \"nvimrclient_debug\" for writing\n");
             fflush(stderr);
         }
     }
 
 #ifdef WIN32
+    FindRConsole();
+    if(!RConsole){
+        fprintf(stderr, "Could not find \"R Console\" window\n");
+        fflush(stderr);
+    }
     NvimHwnd = FindWindow(NULL, "Neovim");
     if(!NvimHwnd){
-        fprintf(stderr, "nvimclient.exe could not find \"Neovim\" window\n");
+        fprintf(stderr, "Could not find \"Neovim\" window\n");
         fflush(stderr);
     }
 #endif
@@ -397,7 +409,7 @@ int main(int argc, char **argv){
                     msg++;
                     SendToServer(OtherNvimPort, msg);
                 } else {
-                    fprintf(stderr, "[nvimclient] Invalid message to send: \"%s\"\n", msg);
+                    fprintf(stderr, "Invalid message to send: \"%s\"\n", msg);
                     fflush(stderr);
                 }
                 break;
@@ -421,9 +433,17 @@ int main(int argc, char **argv){
             case 7: // RaiseNvimWindow
                 RaiseNvimWindow();
                 break;
+            case 8: // Set R Console window handle
+                msg++;
+#ifdef _WIN64
+                RConsole = (HWND)atoll(msg);
+#else
+                RConsole = (HWND)atol(msg);
+#endif
+                break;
 #endif
             default:
-                fprintf(stderr, "[nvimclient] Unknown command received: [%d] %s\n", line[0], msg);
+                fprintf(stderr, "Unknown command received: [%d] %s\n", line[0], msg);
                 fflush(stderr);
                 break;
         }

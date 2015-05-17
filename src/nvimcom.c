@@ -876,9 +876,16 @@ static void nvimcom_save_running_info(int bindportn)
     if(f == NULL){
         REprintf("Error: Could not write to '%s'. [nvimcom]\n", fn);
     } else {
+#ifdef WIN32
 #ifdef _WIN64
-        fprintf(f, "%s\n%s\n%d\n%" PRId64 "\n",
-                nvimcom_version, nvimcom_home, bindportn, R_PID);
+        fprintf(f, "%s\n%s\n%d\n%" PRId64 "\n%" PRId64 "\n",
+                nvimcom_version, nvimcom_home, bindportn, R_PID,
+                (long long)GetConsoleWindow());
+#else
+        fprintf(f, "%s\n%s\n%d\n%d\n%ld\n",
+                nvimcom_version, nvimcom_home, bindportn, R_PID,
+                (long)GetConsoleWindow());
+#endif
 #else
         fprintf(f, "%s\n%s\n%d\n%d\n",
                 nvimcom_version, nvimcom_home, bindportn, R_PID);
@@ -1158,16 +1165,15 @@ static void nvimcom_server_thread(void *arg)
         if(verbose > 1)
             REprintf("nvimcom: Could not bind to port %d [error  %d].\n", bindportn, lastfail);
     }
-    if(nfail > 0 && verbose > 0){
-        if(nfail == 1)
-            REprintf("nvimcom: bind failed once with error %d.\n", lastfail);
-        else
-            REprintf("nvimcom: bind failed %d times and the last error was %d.\n", nfail, lastfail);
+    if(nfail > 0 && verbose > 1){
         if(nattp > nfail)
             REprintf("nvimcom: finally, bind to port %d was successful.\n", bindportn);
     }
     if(nattp == nfail){
-        REprintf("Error: Could not bind. [nvimcom]\n");
+        if(nfail == 1)
+            REprintf("nvimcom: bind failed once with error %d.\n", lastfail);
+        else
+            REprintf("nvimcom: bind failed %d times and the last error was \"%d\".\n", nfail, lastfail);
         nvimcom_failure = 1;
         return;
     }
