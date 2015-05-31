@@ -113,6 +113,14 @@ nvim.omni.line <- function(x, envir, printenv, curlevel) {
                 nvim.omni.line(paste(x, "$", k, sep=""), envir, printenv, curlevel)
             }
         }
+    } else if(isS4(xx) && curlevel == 0){
+        obj.names <- slotNames(xx)
+        curlevel <- curlevel + 1
+        if(length(xx) > 0){
+            for(k in obj.names){
+                nvim.omni.line(paste(x, "@", k, sep=""), envir, printenv, curlevel)
+            }
+        }
     }
 }
 
