@@ -952,6 +952,22 @@ static void nvimcom_parse_received_msg(char *buf)
 #endif
             bbuf = buf;
             bbuf++;
+            if(*bbuf == '&'){
+                bbuf++;
+#ifdef WIN32
+                char flag_eval[512];
+                snprintf(flag_eval, 510, "%s <- %s", bbuf, bbuf);
+                nvimcom_eval_expr(flag_eval);
+                *flag_eval = 0;
+                nvimcom_list_env();
+                vimcom_client_ptr("UpdateOB('GlobalEnv')", obsrvr);
+#else
+                snprintf(flag_eval, 510, "%s <- %s", bbuf, bbuf);
+                flag_lsenv = 1;
+                nvimcom_fire();
+#endif
+                break;
+            }
             nvimcom_toggle_list_status(bbuf);
             if(strstr(bbuf, "package:") == bbuf){
                 openclosel = 1;
