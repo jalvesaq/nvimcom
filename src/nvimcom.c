@@ -960,7 +960,7 @@ static void nvimcom_parse_received_msg(char *buf)
                 nvimcom_eval_expr(flag_eval);
                 *flag_eval = 0;
                 nvimcom_list_env();
-                vimcom_client_ptr("UpdateOB('GlobalEnv')", obsrvr);
+                nvimcom_nvimclient("UpdateOB('GlobalEnv')", obsrvr);
 #else
                 snprintf(flag_eval, 510, "%s <- %s", bbuf, bbuf);
                 flag_lsenv = 1;
