@@ -885,11 +885,11 @@ static void nvimcom_save_running_info(int bindportn)
 #ifdef _WIN64
         fprintf(f, "%s\n%s\n%d\n%" PRId64 "\n%" PRId64 "\n",
                 nvimcom_version, nvimcom_home, bindportn, R_PID,
-                (long long)GetConsoleWindow());
+                (long long)GetForegroundWindow());
 #else
         fprintf(f, "%s\n%s\n%d\n%d\n%ld\n",
                 nvimcom_version, nvimcom_home, bindportn, R_PID,
-                (long)GetConsoleWindow());
+                (long)GetForegroundWindow());
 #endif
 #else
         fprintf(f, "%s\n%s\n%d\n%d\n",

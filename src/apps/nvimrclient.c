@@ -65,7 +65,7 @@ static void SendToServer(const char *port, const char *msg)
     freeaddrinfo(result);	   /* No longer needed */
 
     len = strlen(msg);
-    if (write(s, msg, len) != len) {
+    if (write(s, msg, len) != (ssize_t)len) {
         fprintf(stderr, "Partial/failed write.\n");
         fflush(stderr);
         return;
@@ -117,19 +117,6 @@ static void SendToServer(const char *port, const char *msg)
     }
 }
 
-static void FindRConsole(){
-    RConsole = FindWindow(NULL, "R Console (64-bit)");
-    if(!RConsole){
-        RConsole = FindWindow(NULL, "R Console (32-bit)");
-        if(!RConsole)
-            RConsole = FindWindow(NULL, "R Console");
-    }
-    if(!RConsole){
-        fprintf(stderr, "R Console not found\n");
-        fflush(stderr);
-    }
-}
-
 static void RaiseNvimWindow()
 {
     if(NvimHwnd){
@@ -146,10 +133,8 @@ static void RaiseRConsole(){
 }
 
 static void SendToRConsole(char *aString){
-    if(!RConsole)
-        FindRConsole();
     if(!RConsole){
-        fprintf(stderr, "R Console not found\n");
+        fprintf(stderr, "R Console window ID not defined [SendToRConsole]\n");
         fflush(stderr);
         return;
     }
@@ -176,10 +161,8 @@ static void SendToRConsole(char *aString){
 }
 
 static void RClearConsole(){
-    if(!RConsole)
-        FindRConsole();
     if(!RConsole){
-        fprintf(stderr, "R Console not found\n");
+        fprintf(stderr, "R Console window ID not defined [RClearConsole]\n");
         fflush(stderr);
         return;
     }
@@ -193,10 +176,8 @@ static void RClearConsole(){
 }
 
 static void SaveWinPos(char *cachedir){
-    if(!RConsole)
-        FindRConsole();
     if(!RConsole){
-        fprintf(stderr, "R Console not found\n");
+        fprintf(stderr, "R Console window ID not defined [SaveWinPos]\n");
         fflush(stderr);
         return;
     }
@@ -234,19 +215,17 @@ static void SaveWinPos(char *cachedir){
 }
 
 static void ArrangeWindows(char *cachedir){
+    if(!RConsole){
+        fprintf(stderr, "R Console window ID not defined [ArrangeWindows]\n");
+        fflush(stderr);
+        return;
+    }
+
     char fname[512];
     snprintf(fname, 511, "%s/win_pos", cachedir);
     FILE *f = fopen(fname, "r");
     if(f == NULL){
         fprintf(stderr, "Could not read '%s'\n", fname);
-        fflush(stderr);
-        return;
-    }
-
-    if(!RConsole)
-        FindRConsole();
-    if(!RConsole){
-        fprintf(stderr, "R Console not found\n");
         fflush(stderr);
         return;
     }
@@ -258,6 +237,7 @@ static void ArrangeWindows(char *cachedir){
     } else {
         fprintf(stderr, "Error reading R left position\n");
         fflush(stderr);
+        fclose(f);
         return;
     }
     if((fgets(b, 31, f))){
@@ -265,6 +245,7 @@ static void ArrangeWindows(char *cachedir){
     } else {
         fprintf(stderr, "Error reading R top position\n");
         fflush(stderr);
+        fclose(f);
         return;
     }
     if((fgets(b, 31, f))){
@@ -272,6 +253,7 @@ static void ArrangeWindows(char *cachedir){
     } else {
         fprintf(stderr, "Error reading R right position\n");
         fflush(stderr);
+        fclose(f);
         return;
     }
     if((fgets(b, 31, f))){
@@ -279,6 +261,7 @@ static void ArrangeWindows(char *cachedir){
     } else {
         fprintf(stderr, "Error reading R bottom position\n");
         fflush(stderr);
+        fclose(f);
         return;
     }
     if((fgets(b, 31, f))){
@@ -286,6 +269,7 @@ static void ArrangeWindows(char *cachedir){
     } else {
         fprintf(stderr, "Error reading Neovim left position\n");
         fflush(stderr);
+        fclose(f);
         return;
     }
     if((fgets(b, 31, f))){
@@ -293,6 +277,7 @@ static void ArrangeWindows(char *cachedir){
     } else {
         fprintf(stderr, "Error reading Neovim top position\n");
         fflush(stderr);
+        fclose(f);
         return;
     }
     if((fgets(b, 31, f))){
@@ -300,6 +285,7 @@ static void ArrangeWindows(char *cachedir){
     } else {
         fprintf(stderr, "Error reading Neovim right position\n");
         fflush(stderr);
+        fclose(f);
         return;
     }
     if((fgets(b, 31, f))){
@@ -307,13 +293,15 @@ static void ArrangeWindows(char *cachedir){
     } else {
         fprintf(stderr, "Error reading Neovim bottom position\n");
         fflush(stderr);
+        fclose(f);
         return;
     }
 
     if(!SetWindowPos(RConsole, HWND_TOP,
                 rcR.left, rcR.top, rcR.right, rcR.bottom, 0)){
-        fprintf(stderr, "Error positioning Neovim window\n");
+        fprintf(stderr, "Error positioning RConsole window\n");
         fflush(stderr);
+        fclose(f);
         return;
     }
     Sleep(0.05);
@@ -321,8 +309,8 @@ static void ArrangeWindows(char *cachedir){
                 rcV.left, rcV.top, rcV.right, rcV.bottom, 0)){
         fprintf(stderr, "Error positioning Neovim window\n");
         fflush(stderr);
-        return;
     }
+    fclose(f);
 }
 #endif
 
@@ -358,15 +346,21 @@ int main(int argc, char **argv){
     }
 
 #ifdef WIN32
-    FindRConsole();
-    if(!RConsole){
-        fprintf(stderr, "Could not find \"R Console\" window\n");
+    // Set the value of NvimHwnd
+    if(getenv("WINDOWID")){
+#ifdef _WIN64
+        NvimHwnd = (HWND)atoll(getenv("WINDOWID"));
+#else
+        NvimHwnd = (HWND)atol(getenv("WINDOWID"));
+#endif
+    } else {
+        fprintf(stderr, "$WINDOWID not defined\n");
         fflush(stderr);
-    }
-    NvimHwnd = FindWindow(NULL, "Neovim");
-    if(!NvimHwnd){
-        fprintf(stderr, "Could not find \"Neovim\" window\n");
-        fflush(stderr);
+        NvimHwnd = FindWindow(NULL, "Neovim");
+        if(!NvimHwnd){
+            fprintf(stderr, "Could not find \"Neovim\" window\n");
+            fflush(stderr);
+        }
     }
 #endif
 
@@ -376,7 +370,7 @@ int main(int argc, char **argv){
             fflush(df);
         }
 
-        for(int i = 0; i < strlen(line); i++)
+        for(unsigned int i = 0; i < strlen(line); i++)
             if(line[i] == '\n' || line[i] == '\r')
                 line[i] = 0;
         msg = line;
