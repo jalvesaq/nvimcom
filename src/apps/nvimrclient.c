@@ -117,21 +117,6 @@ static void SendToServer(const char *port, const char *msg)
     }
 }
 
-static void RaiseNvimWindow()
-{
-    if(NvimHwnd){
-        SetForegroundWindow(NvimHwnd);
-    } else {
-        fprintf(stderr, "Nvim window handle not defined\n");
-        fflush(stderr);
-    }
-}
-
-static void RaiseRConsole(){
-    SetForegroundWindow(RConsole);
-    Sleep(0.05);
-}
-
 static void SendToRConsole(char *aString){
     if(!RConsole){
         fprintf(stderr, "R Console window ID not defined [SendToRConsole]\n");
@@ -140,7 +125,7 @@ static void SendToRConsole(char *aString){
     }
 
     SendToServer(NvimcomPort, "\003Set R as busy [SendToRConsole()]");
-    RaiseRConsole();
+    SetForegroundWindow(RConsole);
 
     const size_t len = strlen(aString) + 1;
     HGLOBAL h =  GlobalAlloc(GMEM_MOVEABLE, len);
@@ -155,7 +140,7 @@ static void SendToRConsole(char *aString){
     // http://stackoverflow.com/questions/27976500/postmessage-ctrlv-without-raising-the-window
     keybd_event(VK_CONTROL, 0, 0, 0);
     keybd_event(VkKeyScan('V'), 0, KEYEVENTF_EXTENDEDKEY | 0, 0);
-    Sleep(0.05);
+    //Sleep(0.05);
     keybd_event(VkKeyScan('V'), 0, KEYEVENTF_EXTENDEDKEY | KEYEVENTF_KEYUP, 0);
     keybd_event(VK_CONTROL, 0, KEYEVENTF_KEYUP, 0);
 }
@@ -167,7 +152,7 @@ static void RClearConsole(){
         return;
     }
 
-    RaiseRConsole();
+    SetForegroundWindow(RConsole);
     keybd_event(VK_CONTROL, 0, 0, 0);
     keybd_event(VkKeyScan('L'), 0, KEYEVENTF_EXTENDEDKEY | 0, 0);
     Sleep(0.05);
@@ -304,12 +289,12 @@ static void ArrangeWindows(char *cachedir){
         fclose(f);
         return;
     }
-    Sleep(0.05);
     if(!SetWindowPos(NvimHwnd, HWND_TOP,
                 rcV.left, rcV.top, rcV.right, rcV.bottom, 0)){
         fprintf(stderr, "Error positioning Neovim window\n");
         fflush(stderr);
     }
+    SetForegroundWindow(NvimHwnd);
     fclose(f);
 }
 #endif
@@ -345,7 +330,38 @@ int main(int argc, char **argv){
         }
     }
 
+    //Set nvimcom port
+    if(getenv("NVIMCOMPORT")){
+        strcpy(NvimcomPort, getenv("NVIMCOMPORT"));
+    } else {
+        fprintf(stderr, "$NVIMCOMPORT not defined\n");
+        fflush(stderr);
+    }
+
 #ifdef WIN32
+    // Set the value of RConsole
+    if(getenv("RCONSOLE")){
+#ifdef _WIN64
+        RConsole = (HWND)atoll(getenv("RCONSOLE"));
+#else
+        RConsole = (HWND)atol(getenv("RCONSOLE"));
+#endif
+    } else {
+        fprintf(stderr, "$RCONSOLE not defined\n");
+        fflush(stderr);
+
+        RConsole = FindWindow(NULL, "R Console (64-bit)");
+        if(!RConsole){
+            RConsole = FindWindow(NULL, "R Console (32-bit)");
+            if(!RConsole)
+                RConsole = FindWindow(NULL, "R Console");
+        }
+        if(!RConsole){
+            fprintf(stderr, "\"R Console\" window not found\n");
+            fflush(stderr);
+        }
+    }
+
     // Set the value of NvimHwnd
     if(getenv("WINDOWID")){
 #ifdef _WIN64
@@ -358,7 +374,7 @@ int main(int argc, char **argv){
         fflush(stderr);
         NvimHwnd = FindWindow(NULL, "Neovim");
         if(!NvimHwnd){
-            fprintf(stderr, "Could not find \"Neovim\" window\n");
+            fprintf(stderr, "\"Neovim\" window not found\n");
             fflush(stderr);
         }
     }
@@ -426,15 +442,8 @@ int main(int argc, char **argv){
                 RClearConsole();
                 break;
             case 7: // RaiseNvimWindow
-                RaiseNvimWindow();
-                break;
-            case 8: // Set R Console window handle
-                msg++;
-#ifdef _WIN64
-                RConsole = (HWND)atoll(msg);
-#else
-                RConsole = (HWND)atol(msg);
-#endif
+                if(NvimHwnd)
+                    SetForegroundWindow(NvimHwnd);
                 break;
 #endif
             default:
