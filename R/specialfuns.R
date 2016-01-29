@@ -190,7 +190,7 @@ nvim.getclass <- function(x)
         tr <- try(obj <- eval(expression(x)))
     }
     if(class(tr)[1] == "try-error"){
-        return("Error getting evaluating the object")
+        return("Error evaluating the object")
     } else {
         return(class(obj)[1])
     }
