@@ -9,9 +9,9 @@
   Vim-R-plugin.
 }
 \usage{
-nvim.print(object, classfor)
+nvim.print(object, objclass)
 }
 \arguments{
   \item{object}{An R object.}
-  \item{classfor}{The R expression following the parenthesis, if any.}
+  \item{objclass}{The class of the R object following the parenthesis, if any.}
 }
