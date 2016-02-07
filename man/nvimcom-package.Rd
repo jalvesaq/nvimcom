@@ -27,7 +27,16 @@
     }
 
   }
+
+  The diagram below illustrates how the communication between Neovim and R
+  works. The \pkg{nvimcom} creates a TCP server to receive messages from
+  Neovim and provides an application (\samp{nclientserver}) used by Neovim to
+  run a TCP server (a more detailed explanation can be found on
+  \href{https://github.com/jalvesaq/Nvim-R}{Nvim-R homepage}).
+
+  \figure{nvimrcom.png}
 }
+
 \seealso{\link[base]{Startup}}
 \author{
 Jakson Alves de Aquino \email{jalvesaq@gmail.com}

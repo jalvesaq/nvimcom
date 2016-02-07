@@ -1,3 +1,7 @@
+Version 0.9-8.3 (2016-02-07)
+
+  - Join nvimclient and nvimserver into nclientserver.
+
 Version 0.9-8 (2015-11-03)
 
   - Initial release.
