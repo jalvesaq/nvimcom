@@ -507,18 +507,26 @@ static void ArrangeWindows(char *cachedir){
         return;
     }
 
-    if(!SetWindowPos(RConsole, HWND_TOP,
-                rcR.left, rcR.top, rcR.right, rcR.bottom, 0)){
-        fprintf(stderr, "Error positioning RConsole window\n");
-        fflush(stderr);
-        fclose(f);
-        return;
+    if(rcR.left > 0 && rcR.top > 0 && rcR.right > 0 && rcR.bottom > 0 &&
+            rcR.right > rcR.left && rcR.bottom > rcR.top){
+        if(!SetWindowPos(RConsole, HWND_TOP,
+                    rcR.left, rcR.top, rcR.right, rcR.bottom, 0)){
+            fprintf(stderr, "Error positioning RConsole window\n");
+            fflush(stderr);
+            fclose(f);
+            return;
+        }
     }
-    if(!SetWindowPos(NvimHwnd, HWND_TOP,
-                rcV.left, rcV.top, rcV.right, rcV.bottom, 0)){
-        fprintf(stderr, "Error positioning Neovim window\n");
-        fflush(stderr);
+
+    if(rcV.left > 0 && rcV.top > 0 && rcV.right > 0 && rcV.bottom > 0 &&
+            rcV.right > rcV.left && rcV.bottom > rcV.top){
+        if(!SetWindowPos(NvimHwnd, HWND_TOP,
+                    rcV.left, rcV.top, rcV.right, rcV.bottom, 0)){
+            fprintf(stderr, "Error positioning Neovim window\n");
+            fflush(stderr);
+        }
     }
+
     SetForegroundWindow(NvimHwnd);
     fclose(f);
 }
