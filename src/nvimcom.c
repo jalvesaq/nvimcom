@@ -892,8 +892,13 @@ static void nvimcom_save_running_info(int bindportn)
                 (long)GetForegroundWindow());
 #endif
 #else
-        fprintf(f, "%s\n%s\n%d\n%d\n",
-                nvimcom_version, nvimcom_home, bindportn, R_PID);
+        if(getenv("WINDOWID"))
+            fprintf(f, "%s\n%s\n%d\n%d\n%s\n",
+                    nvimcom_version, nvimcom_home, bindportn, R_PID,
+                    getenv("WINDOWID"));
+        else
+            fprintf(f, "%s\n%s\n%d\n%d\n0\n",
+                    nvimcom_version, nvimcom_home, bindportn, R_PID);
 #endif
         fclose(f);
     }
