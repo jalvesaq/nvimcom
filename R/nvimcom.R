@@ -76,10 +76,10 @@ nvim.edit <- function(name, file, title)
     if(is.null(name))
         stop("Feature not implemented. Use nvim to create R objects from scratch.")
 
-    finalA <- paste0(Sys.getenv("NVIMR_TMPDIR"), "/nvimcom_edit_", Sys.getenv("NVIMR_ID"), "_A")
-    finalB <- paste0(Sys.getenv("NVIMR_TMPDIR"), "/nvimcom_edit_", Sys.getenv("NVIMR_ID"), "_B")
-    unlink(finalB)
-    writeLines(text = "Waiting...", con = finalA)
+    waitf <- paste0(Sys.getenv("NVIMR_TMPDIR"), "/edit_", Sys.getenv("NVIMR_ID"), "_wait")
+    editf <- paste0(Sys.getenv("NVIMR_TMPDIR"), "/edit_", Sys.getenv("NVIMR_ID"))
+    unlink(editf)
+    writeLines(text = "Waiting...", con = waitf)
 
     initial = paste0(Sys.getenv("NVIMR_TMPDIR"), "/nvimcom_edit_", round(runif(1, min = 100, max = 999)))
     sink(initial)
@@ -90,11 +90,11 @@ nvim.edit <- function(name, file, title)
        paste0("ShowRObject('", initial, "')"),
        PACKAGE="nvimcom")
 
-    while(file.exists(finalA))
+    while(file.exists(waitf))
         Sys.sleep(1)
-    x <- eval(parse(finalB))
+    x <- eval(parse(editf))
     unlink(initial)
-    unlink(finalB)
+    unlink(editf)
     return(invisible(x))
 }
 
