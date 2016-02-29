@@ -57,8 +57,6 @@ static char strT[16];
 static char tmpdir[512];
 static char nvimcom_home[1024];
 static int objbr_auto = 0;
-static int has_new_lib = 0;
-static int has_new_obj = 0;
 
 #ifdef WIN32
 static int r_is_busy = 1;
@@ -506,7 +504,7 @@ static void nvimcom_write_obbr()
     }
     fprintf(f, "%s", obbrbuf1);
     fclose(f);
-    has_new_obj = 1;
+    nvimcom_nvimclient("UpdateOB('GlobalEnv')", obsrvr);
 }
 
 static void nvimcom_list_env()
@@ -515,6 +513,9 @@ static void nvimcom_list_env()
     SEXP envVarsSEXP, varSEXP;
 
     if(tmpdir[0] == 0)
+        return;
+
+    if(objbr_auto != 1)
         return;
 
 #ifndef WIN32
@@ -707,18 +708,13 @@ static int nvimcom_checklibs()
         fprintf(f, "%s\n", builtlibs[i]);
     }
     fclose(f);
+
     return(newnlibs);
 }
 
 static void nvimcom_list_libs()
 {
     int newnlibs;
-    int len, len1;
-    char *libn;
-    char prefixT[64];
-    char prefixL[64];
-    char libasenv[64];
-    SEXP x, oblist, obj;
 
     if(tmpdir[0] == 0)
         return;
@@ -730,6 +726,16 @@ static void nvimcom_list_libs()
 
     nlibs = newnlibs;
     openclosel = 0;
+
+    if(objbr_auto != 2)
+        return;
+
+    int len, len1;
+    char *libn;
+    char prefixT[64];
+    char prefixL[64];
+    char libasenv[64];
+    SEXP x, oblist, obj;
 
     memset(obbrbuf2, 0, obbrbufzise);
     char *p = nvimcom_strcat(obbrbuf2, "Libraries | .GlobalEnv\n\n");
@@ -785,32 +791,14 @@ static void nvimcom_list_libs()
     fclose(f);
     opendf = save_opendf;
     openls = save_openls;
-    has_new_lib = 2;
+    nvimcom_nvimclient("UpdateOB('libraries')", obsrvr);
 }
 
 Rboolean nvimcom_task(SEXP expr, SEXP value, Rboolean succeeded,
         Rboolean visible, void *userData)
 {
     nvimcom_list_libs();
-    if(objbr_auto){
-        nvimcom_list_env();
-        switch(has_new_lib + has_new_obj){
-            case 1:
-                if(obsrvr[0] != 0)
-                    nvimcom_nvimclient("UpdateOB('GlobalEnv')", obsrvr);
-                break;
-            case 2:
-                if(obsrvr[0] != 0)
-                    nvimcom_nvimclient("UpdateOB('libraries')", obsrvr);
-                break;
-            case 3:
-                if(obsrvr[0] != 0)
-                    nvimcom_nvimclient("UpdateOB('both')", obsrvr);
-                break;
-        }
-        has_new_lib = 0;
-        has_new_obj = 0;
-    }
+    nvimcom_list_env();
 #ifdef WIN32
     r_is_busy = 0;
 #endif
@@ -831,22 +819,6 @@ static void nvimcom_exec(){
         nvimcom_list_env();
     if(flag_lslibs)
         nvimcom_list_libs();
-    switch(has_new_lib + has_new_obj){
-        case 1:
-            if(obsrvr[0] != 0)
-                nvimcom_nvimclient("UpdateOB('GlobalEnv')", obsrvr);
-            break;
-        case 2:
-            if(obsrvr[0] != 0)
-                nvimcom_nvimclient("UpdateOB('libraries')", obsrvr);
-            break;
-        case 3:
-            if(obsrvr[0] != 0)
-                nvimcom_nvimclient("UpdateOB('both')", obsrvr);
-            break;
-    }
-    has_new_lib = 0;
-    has_new_obj = 0;
     flag_lsenv = 0;
     flag_lslibs = 0;
 }
@@ -930,10 +902,8 @@ static void nvimcom_parse_received_msg(char *buf)
             strcpy(obsrvr, bbuf);
             nvimcom_del_newline(obsrvr);
 #ifdef WIN32
-            if(!r_is_busy){
+            if(!r_is_busy)
                 nvimcom_list_env();
-                nvimcom_list_libs();
-            }
 #else
             flag_lsenv = 1;
             flag_lslibs = 1;
@@ -945,11 +915,34 @@ static void nvimcom_parse_received_msg(char *buf)
             r_is_busy = 1;
             break;
 #endif
-        case 4: // Stop automatic update of Object Browser info
-            objbr_auto = 0;
-            memset(obbrbuf1, 0, obbrbufzise);
+        case 4: // Change value of objbr_auto
+            if(buf[1] == 'G'){
+                objbr_auto = 1;
+                memset(obbrbuf1, 0, obbrbufzise);
+            } else if(buf[1] == 'L'){
+                nlibs = 0;
+                objbr_auto = 2;
+            } else {
+                objbr_auto = 0;
+            }
+#ifdef WIN32
+            if(!r_is_busy){
+                if(objbr_auto == 1)
+                    nvimcom_list_env();
+                else
+                    if(objbr_auto == 2)
+                        nvimcom_list_libs();
+            }
+#else
+            if(objbr_auto == 1)
+                flag_lsenv = 1;
+            else
+                if(objbr_auto == 2)
+                    flag_lslibs = 1;
+            if(objbr_auto != 0)
+                nvimcom_fire();
+#endif
             break;
-            /* case 5: Update OB (Neovim does not need this) */
         case 6: // Toggle list status
 #ifdef WIN32
             if(r_is_busy)
@@ -965,7 +958,6 @@ static void nvimcom_parse_received_msg(char *buf)
                 nvimcom_eval_expr(flag_eval);
                 *flag_eval = 0;
                 nvimcom_list_env();
-                nvimcom_nvimclient("UpdateOB('GlobalEnv')", obsrvr);
 #else
                 snprintf(flag_eval, 510, "%s <- %s", bbuf, bbuf);
                 flag_lsenv = 1;
@@ -978,14 +970,12 @@ static void nvimcom_parse_received_msg(char *buf)
                 openclosel = 1;
 #ifdef WIN32
                 nvimcom_list_libs();
-                nvimcom_nvimclient("UpdateOB('libraries')", obsrvr);
 #else
                 flag_lslibs = 1;
 #endif
             } else {
 #ifdef WIN32
                 nvimcom_list_env();
-                nvimcom_nvimclient("UpdateOB('GlobalEnv')", obsrvr);
 #else
                 flag_lsenv = 1;
 #endif
@@ -998,16 +988,15 @@ static void nvimcom_parse_received_msg(char *buf)
 #ifdef WIN32
             if(r_is_busy)
                 break;
-
 #endif
             bbuf = buf;
             bbuf++;
             status = atoi(bbuf);
             ListStatus *tmp = firstList;
-            if(status < 2){
+            if(status){
                 while(tmp){
                     if(strstr(tmp->key, "package:") != tmp->key)
-                        tmp->status = status;
+                        tmp->status = 1;
                     tmp = tmp->next;
                 }
 #ifdef WIN32
@@ -1017,8 +1006,7 @@ static void nvimcom_parse_received_msg(char *buf)
 #endif
             } else {
                 while(tmp){
-                    if(strstr(tmp->key, "package:") == tmp->key)
-                        tmp->status = 0;
+                    tmp->status = 0;
                     tmp = tmp->next;
                 }
                 openclosel = 1;
@@ -1030,9 +1018,7 @@ static void nvimcom_parse_received_msg(char *buf)
                 flag_lslibs = 1;
 #endif
             }
-#ifdef WIN32
-            nvimcom_nvimclient("UpdateOB('both')", obsrvr);
-#else
+#ifndef WIN32
             nvimcom_fire();
 #endif
             break;

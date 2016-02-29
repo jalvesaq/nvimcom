@@ -21,8 +21,6 @@ HWND RConsole = NULL;
 #endif
 
 static char NvimcomPort[16];
-static char OtherNvimPort[16];
-
 static char VimSecret[128];
 static int VimSecretLen;
 FILE *df = NULL;
@@ -537,7 +535,6 @@ int main(int argc, char **argv){
     char *msg;
     memset(line, 0, 1024);
     strcpy(NvimcomPort, "0");
-    strcpy(OtherNvimPort, "0");
 
     if(argc == 3 && getenv("NVIMR_PORT") && getenv("NVIMR_SECRET")){
         snprintf(line, 1023, "%scall SyncTeX_backward('%s', %s)", getenv("NVIMR_SECRET"), argv[1], argv[2]);
@@ -648,34 +645,15 @@ int main(int argc, char **argv){
         switch(*msg){
             case 1: // SetPort
                 msg++;
-                if(*msg == 'R'){
-                    msg++;
-                    strncpy(NvimcomPort, msg, 15);
+                strncpy(NvimcomPort, msg, 15);
 #ifdef WIN32
-                    if(msg[0] == '0')
-                        RConsole = NULL;
+                if(msg[0] == '0')
+                    RConsole = NULL;
 #endif
-                } else if(msg[0] == 'O'){
-                    msg++;
-                    strncpy(OtherNvimPort, msg, 15);
-                } else {
-                    msg++;
-                    fprintf(stderr, "Invalid message to set port: \"%s\"\n", msg);
-                    fflush(stderr);
-                }
                 break;
             case 2: // Send message
                 msg++;
-                if(msg[0] == 'R'){
-                    msg++;
-                    SendToServer(NvimcomPort, msg);
-                } else if(msg[0] == 'O'){
-                    msg++;
-                    SendToServer(OtherNvimPort, msg);
-                } else {
-                    fprintf(stderr, "Invalid message to send: \"%s\"\n", msg);
-                    fflush(stderr);
-                }
+                SendToServer(NvimcomPort, msg);
                 break;
 #ifdef WIN32
             case 3: // SendToRConsole
