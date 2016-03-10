@@ -56,7 +56,7 @@ static char strL[16];
 static char strT[16];
 static char tmpdir[512];
 static char nvimcom_home[1024];
-static int objbr_auto = 0;
+static int objbr_auto = 0; // 0 = Nothing; 1 = .GlobalEnv; 2 = Libraries
 
 #ifdef WIN32
 static int r_is_busy = 1;
@@ -1127,7 +1127,6 @@ static void *nvimcom_server_thread(void *arg)
                 REprintf("nvimcom: recvfrom failed\n");
             continue;     /* Ignore failed request */
         }
-
         nvimcom_parse_received_msg(buf);
     }
     return(NULL);
@@ -1205,9 +1204,9 @@ static void nvimcom_server_thread(void *arg)
             REprintf("nvimcom: recvfrom failed with error %d\n", WSAGetLastError());
             return;
         }
-
         nvimcom_parse_received_msg(buf);
     }
+
     REprintf("nvimcom: Finished receiving. Closing socket.\n");
     result = closesocket(sfd);
     if (result == SOCKET_ERROR) {
@@ -1218,7 +1217,6 @@ static void nvimcom_server_thread(void *arg)
     return;
 }
 #endif
-
 
 void nvimcom_Start(int *vrb, int *odf, int *ols, int *anm, int *lbe, char **pth, char **vcv)
 {

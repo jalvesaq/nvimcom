@@ -7,7 +7,7 @@ if(file.exists("symbols.rds"))
 
 exec <- "apps/nclientserver"
 if(WINDOWS)
-    exec <- "apps/nclientserver.exe"
+    exec <- c("apps/nclientserver.exe", "apps/libNvimR.dll")
 if(any(file.exists(exec))){
     dest <- file.path(R_PACKAGE_DIR,  paste0('bin', R_ARCH))
     dir.create(dest, recursive = TRUE, showWarnings = FALSE)

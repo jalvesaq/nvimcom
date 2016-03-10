@@ -26,9 +26,11 @@ static int VimSecretLen;
 FILE *df = NULL;
 
 #ifdef WIN32
-static int tid;
+static SOCKET Sfd;
+static int Tid;
 #else
-static pthread_t tid;
+static int Sfd = -1;
+static pthread_t Tid;
 #endif
 
 static void HandleSigTerm(int s)
@@ -78,7 +80,7 @@ static void *NeovimServer(void *arg)
     struct addrinfo *rp;
     struct addrinfo *res;
     struct sockaddr_storage peer_addr;
-    int sfd = -1;
+    int Sfd = -1;
     char bindport[16];
     socklen_t peer_addr_len = sizeof(struct sockaddr_storage);
 
@@ -111,12 +113,12 @@ static void *NeovimServer(void *arg)
         }
 
         for (rp = res; rp != NULL; rp = rp->ai_next) {
-            sfd = socket(rp->ai_family, rp->ai_socktype, rp->ai_protocol);
-            if (sfd == -1)
+            Sfd = socket(rp->ai_family, rp->ai_socktype, rp->ai_protocol);
+            if (Sfd == -1)
                 continue;
-            if (bind(sfd, rp->ai_addr, rp->ai_addrlen) == 0)
+            if (bind(Sfd, rp->ai_addr, rp->ai_addrlen) == 0)
                 break;       /* Success */
-            close(sfd);
+            close(Sfd);
         }
         freeaddrinfo(res);   /* No longer needed */
     }
@@ -133,7 +135,7 @@ static void *NeovimServer(void *arg)
     for (;;) {
         memset(buf, 0, bsize);
 
-        nread = recvfrom(sfd, buf, bsize, 0,
+        nread = recvfrom(Sfd, buf, bsize, 0,
                 (struct sockaddr *) &peer_addr, &peer_addr_len);
         if (nread == -1){
             fprintf(stderr, "recvfrom failed [port %d]\n", bindportn);
@@ -165,7 +167,7 @@ static void NeovimServer(void *arg)
     WSADATA wsaData;
     SOCKADDR_IN RecvAddr;
     SOCKADDR_IN peer_addr;
-    SOCKET sfd;
+    SOCKET Sfd;
     int peer_addr_len = sizeof (peer_addr);
     int nattp = 0;
     int nfail = 0;
@@ -179,8 +181,8 @@ static void NeovimServer(void *arg)
 
     while(bindportn < 10149){
         bindportn++;
-        sfd = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
-        if (sfd == INVALID_SOCKET) {
+        Sfd = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+        if (Sfd == INVALID_SOCKET) {
             fprintf(stderr, "socket failed with error %d\n", WSAGetLastError());
             fflush(stderr);
             return;
@@ -191,7 +193,7 @@ static void NeovimServer(void *arg)
         RecvAddr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
 
         nattp++;
-        if(bind(sfd, (SOCKADDR *) & RecvAddr, sizeof (RecvAddr)) == 0)
+        if(bind(Sfd, (SOCKADDR *) & RecvAddr, sizeof (RecvAddr)) == 0)
             break;
         nfail++;
     }
@@ -207,7 +209,7 @@ static void NeovimServer(void *arg)
     for (;;) {
         memset(buf, 0, bsize);
 
-        nread = recvfrom(sfd, buf, bsize, 0,
+        nread = recvfrom(Sfd, buf, bsize, 0,
                 (SOCKADDR *) &peer_addr, &peer_addr_len);
         if (nread == SOCKET_ERROR) {
             fprintf(stderr, "recvfrom failed with error %d [port %d]\n",
@@ -224,7 +226,7 @@ static void NeovimServer(void *arg)
         fprintf(df, "Neovim server: Finished receiving. Closing socket.\n");
         fflush(df);
     }
-    result = closesocket(sfd);
+    result = closesocket(Sfd);
     if (result == SOCKET_ERROR) {
         fprintf(stderr, "closesocket failed with error %d\n", WSAGetLastError());
         fflush(stderr);
@@ -533,6 +535,7 @@ static void ArrangeWindows(char *cachedir){
 int main(int argc, char **argv){
     char line[1024];
     char *msg;
+    int keep_running = 1;
     memset(line, 0, 1024);
     strcpy(NvimcomPort, "0");
 
@@ -627,14 +630,16 @@ int main(int argc, char **argv){
 #endif
 
 #ifdef WIN32
-    tid = _beginthread(NeovimServer, 0, NULL);
+    Tid = _beginthread(NeovimServer, 0, NULL);
 #else
-    pthread_create(&tid, NULL, NeovimServer, NULL);
+    pthread_create(&Tid, NULL, NeovimServer, NULL);
 #endif
 
-    while(fgets(line, 1023, stdin)){
+    while(fgets(line, 1023, stdin) && keep_running){
         if(df){
-            fprintf(df, "stdin: [%d] %s", (unsigned int)*line, line);
+            msg = line;
+            msg++;
+            fprintf(df, "stdin: [%d] %s", (unsigned int)*line, msg);
             fflush(df);
         }
 
@@ -677,6 +682,9 @@ int main(int argc, char **argv){
                     SetForegroundWindow(NvimHwnd);
                 break;
 #endif
+            case 8: // Quit now
+                keep_running = 0;
+                break;
             default:
                 fprintf(stderr, "Unknown command received: [%d] %s\n", line[0], msg);
                 fflush(stderr);
@@ -684,6 +692,14 @@ int main(int argc, char **argv){
         }
         memset(line, 0, 1024);
     }
+#ifdef WIN32
+        closesocket(Sfd);
+        WSACleanup();
+#else
+        close(Sfd);
+        pthread_cancel(Tid);
+        pthread_join(Tid, NULL);
+#endif
     if(df)
         fclose(df);
     return 0;

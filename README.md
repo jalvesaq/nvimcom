@@ -1,12 +1,12 @@
 # nvimcom
 
 This is the development version of the R package *nvimcom*, which creates a
-server on R to allow the communication with
-[Neovim](https://github.com/neovim/neovim) through the
+server on R to allow the communication with either
+[Neovim](https://github.com/neovim/neovim) or [Vim](http://www.vim.org) through the
 [Nvim-R](https://github.com/jalvesaq/Nvim-R) plugin. The package is necessary
 to update the highlighting of the names of R functions, open R documentation
-in Neovim's buffer, run the Object Browser, run either `Sweave()` or `knit()`
-on the document being edited. It also has some functions called by Neovim such
+in editor's buffer, run the Object Browser, run either `Sweave()` or `knit()`
+on the document being edited. It also has some functions called by editor such
 as `nvim.plot()`, `nvim.print()`, and `nvim.bol()`. This last one is required
 to build the data base used in omnicompletion. The nvimcom code necessary to
 automatically update both the Object Browser and the list of functions for
