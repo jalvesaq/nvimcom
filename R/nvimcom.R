@@ -32,6 +32,7 @@
 }
 
 .onAttach <- function(libname, pkgname) {
+    stop("\n\n  >>> https://github.com/jalvesaq/nvimcom is deprecated\n  >>> because nvimcom now is part of Nvim-R source code.\n  >>> THERE IS NO NEED TO INSTALL THIS PACKAGE MANUALLY.\n  >>> Nvim-R will install and updated it automatically.\n")
     if(Sys.getenv("NVIMR_TMPDIR") == "")
         return(invisible(NULL))
     if(version$os == "mingw32")
